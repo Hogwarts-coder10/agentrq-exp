@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -84,4 +85,10 @@ func GenerateSecret(n int) (string, error) {
 		b[i] = charset[num.Int64()]
 	}
 	return string(b), nil
+}
+
+// SecureCompare performs a constant-time comparison of two strings.
+// It wraps crypto/subtle.ConstantTimeCompare to mitigate timing attacks.
+func SecureCompare(a, b string) bool {
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
