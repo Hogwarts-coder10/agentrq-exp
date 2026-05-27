@@ -50,6 +50,15 @@ type Repository interface {
 	CreateUser(ctx context.Context, u model.User) (model.User, error)
 	UpdateUser(ctx context.Context, u model.User) (model.User, error)
 	GetNextTask(ctx context.Context, workspaceID int64, userID int64) (model.Task, error)
+
+	// Slack integration
+	UpsertSlackWorkspaceLink(ctx context.Context, link model.SlackWorkspaceLink) error
+	GetSlackWorkspaceLink(ctx context.Context, workspaceID int64) (model.SlackWorkspaceLink, error)
+	GetSlackWorkspaceLinkByChannel(ctx context.Context, channelID string) (model.SlackWorkspaceLink, error)
+	DeleteSlackWorkspaceLink(ctx context.Context, workspaceID int64) error
+	UpsertSlackTaskThread(ctx context.Context, thread model.SlackTaskThread) error
+	GetSlackTaskThreadByTask(ctx context.Context, taskID int64) (model.SlackTaskThread, error)
+	GetSlackTaskThreadByChannel(ctx context.Context, channelID, threadTS string) (model.SlackTaskThread, error)
 }
 
 type repository struct {
@@ -539,4 +548,54 @@ func (r *repository) UpdateUser(ctx context.Context, u model.User) (model.User, 
 		return model.User{}, err
 	}
 	return u, nil
+}
+
+// ── Slack Integration ─────────────────────────────────────────────────────────
+
+func (r *repository) UpsertSlackWorkspaceLink(ctx context.Context, link model.SlackWorkspaceLink) error {
+	return r.conn(ctx).Save(&link).Error
+}
+
+func (r *repository) GetSlackWorkspaceLink(ctx context.Context, workspaceID int64) (model.SlackWorkspaceLink, error) {
+	var l model.SlackWorkspaceLink
+	err := r.conn(ctx).First(&l, "workspace_id = ?", workspaceID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.SlackWorkspaceLink{}, ErrNotFound
+	}
+	return l, err
+}
+
+func (r *repository) GetSlackWorkspaceLinkByChannel(ctx context.Context, channelID string) (model.SlackWorkspaceLink, error) {
+	var l model.SlackWorkspaceLink
+	err := r.conn(ctx).First(&l, "slack_channel_id = ?", channelID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.SlackWorkspaceLink{}, ErrNotFound
+	}
+	return l, err
+}
+
+func (r *repository) DeleteSlackWorkspaceLink(ctx context.Context, workspaceID int64) error {
+	return r.conn(ctx).Delete(&model.SlackWorkspaceLink{}, "workspace_id = ?", workspaceID).Error
+}
+
+func (r *repository) UpsertSlackTaskThread(ctx context.Context, thread model.SlackTaskThread) error {
+	return r.conn(ctx).Save(&thread).Error
+}
+
+func (r *repository) GetSlackTaskThreadByTask(ctx context.Context, taskID int64) (model.SlackTaskThread, error) {
+	var t model.SlackTaskThread
+	err := r.conn(ctx).First(&t, "task_id = ?", taskID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.SlackTaskThread{}, ErrNotFound
+	}
+	return t, err
+}
+
+func (r *repository) GetSlackTaskThreadByChannel(ctx context.Context, channelID, threadTS string) (model.SlackTaskThread, error) {
+	var t model.SlackTaskThread
+	err := r.conn(ctx).Where("slack_channel_id = ? AND thread_ts = ?", channelID, threadTS).First(&t).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return model.SlackTaskThread{}, ErrNotFound
+	}
+	return t, err
 }

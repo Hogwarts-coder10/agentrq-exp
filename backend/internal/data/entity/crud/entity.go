@@ -1,6 +1,9 @@
 package crud
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 type (
 	// Actor enum for mapping human and agent actions
@@ -12,14 +15,17 @@ type (
 	// Action enum for mapping standard CRUD and system actions
 	Action int
 
+	// Origin enum for mapping event origins
+	Origin int
+
 	// Workspace entity
 	Workspace struct {
-		ID          int64
-		CreatedAt   time.Time
-		UpdatedAt   time.Time
-		UserID      int64
-		Name        string
-		Description string
+		ID                   int64
+		CreatedAt            time.Time
+		UpdatedAt            time.Time
+		UserID               int64
+		Name                 string
+		Description          string
 		ArchivedAt           *time.Time
 		Icon                 string
 		NotificationSettings *NotificationSettings
@@ -29,6 +35,18 @@ type (
 		AutoAllowedTools     []string
 		AllowAllCommands     bool
 		SelfLearningLoopNote string
+		Slack                *SlackConfig
+	}
+
+	// SlackConfig holds the Slack channel linked to a workspace.
+	SlackConfig struct {
+		Enabled     bool   `json:"enabled"`
+		Installed   bool   `json:"installed"`
+		ChannelID   string `json:"channelId,omitempty"`
+		ChannelName string `json:"channelName,omitempty"`
+		AutoCreated bool   `json:"autoCreated,omitempty"`
+		ClientID    string `json:"clientId,omitempty"`
+		AuthURL     string `json:"authUrl,omitempty"`
 	}
 
 	NotificationSettings struct {
@@ -42,7 +60,7 @@ type (
 
 	CreateWorkspaceRequest struct {
 		Workspace Workspace
-		UserID  string
+		UserID    string
 	}
 
 	CreateWorkspaceResponse struct {
@@ -97,6 +115,21 @@ type (
 		UserID      string
 	}
 
+	// SetWorkspaceSlackChannelRequest assigns a Slack channel to a workspace.
+	SetWorkspaceSlackChannelRequest struct {
+		WorkspaceID int64
+		ChannelID   string
+		ChannelName string
+		AutoCreated bool
+		UserID      string
+	}
+
+	// RemoveWorkspaceSlackChannelRequest removes the Slack channel assignment from a workspace.
+	RemoveWorkspaceSlackChannelRequest struct {
+		WorkspaceID int64
+		UserID      string
+	}
+
 	Attachment struct {
 		ID       string `json:"id"`
 		Filename string `json:"filename"`
@@ -119,23 +152,23 @@ type (
 	// CreatedBy: "human" | "agent"
 	// Status:    "notstarted" | "ongoing" | "completed" | "rejected" | "cron" | "blocked"
 	Task struct {
-		ID          int64
-		CreatedAt   time.Time
-		UpdatedAt   time.Time
-		UserID      int64
-		WorkspaceID int64
-		CreatedBy   string
-		Assignee    string
-		Status      string
-		Title       string
-		Body        string
-		Response    string
-		ReplyText   string
-		Attachments []Attachment
-		Messages    []Message
-		CronSchedule string
-		ParentID     int64
-		SortOrder    float64
+		ID               int64
+		CreatedAt        time.Time
+		UpdatedAt        time.Time
+		UserID           int64
+		WorkspaceID      int64
+		CreatedBy        string
+		Assignee         string
+		Status           string
+		Title            string
+		Body             string
+		Response         string
+		ReplyText        string
+		Attachments      []Attachment
+		Messages         []Message
+		CronSchedule     string
+		ParentID         int64
+		SortOrder        float64
 		AllowAllCommands bool
 	}
 
@@ -236,6 +269,7 @@ type (
 		Text        string
 		Attachments []Attachment
 		UserID      string
+		SlackUser   string
 	}
 
 	ReplyToTaskResponse struct {
@@ -271,14 +305,14 @@ type (
 	}
 
 	UpdateScheduledTaskRequest struct {
-		WorkspaceID  int64
-		TaskID       int64
-		Title        string
-		Body         string
-		Assignee     string
-		CronSchedule string
+		WorkspaceID      int64
+		TaskID           int64
+		Title            string
+		Body             string
+		Assignee         string
+		CronSchedule     string
 		AllowAllCommands bool
-		UserID       string
+		UserID           string
 	}
 
 	UpdateScheduledTaskResponse struct {
@@ -343,7 +377,8 @@ type (
 		UserID       int64        `json:"userId"`
 		ResourceType ResourceType `json:"resourceType"`
 		ResourceID   int64        `json:"resourceId"`
-		Actor        Actor        `json:"actor"` // 1: Human, 2: Agent
+		Actor        Actor        `json:"actor"`  // 1: Human, 2: Agent
+		Origin       Origin       `json:"origin"` // 1: API, 2: MCP, 3: Scheduler, 4: Slack
 	}
 )
 
@@ -379,6 +414,53 @@ func (r ResourceType) String() string {
 }
 
 const (
+	OriginInvalid Origin = iota
+	OriginAPI
+	OriginMCP
+	OriginScheduler
+	OriginSlack
+)
+
+func (o Origin) String() string {
+	switch o {
+	case OriginInvalid:
+		return "invalid"
+	case OriginAPI:
+		return "api"
+	case OriginMCP:
+		return "mcp"
+	case OriginScheduler:
+		return "scheduler"
+	case OriginSlack:
+		return "slack"
+	}
+	return "unknown"
+}
+
+func (o Origin) Int64() int64 {
+	return int64(o)
+}
+
+type contextKey string
+
+const OriginContextKey contextKey = "event_origin"
+
+func WithOrigin(ctx context.Context, o Origin) context.Context {
+	return context.WithValue(ctx, OriginContextKey, o)
+}
+
+func GetOrigin(ctx context.Context) Origin {
+	if ctx == nil {
+		return OriginInvalid
+	}
+	if o, ok := ctx.Value(OriginContextKey).(Origin); ok {
+		return o
+	}
+	return OriginInvalid
+}
+
+
+const (
 	ActionUserCreate Action = iota + 1
 	ActionUserUpdate
 	ActionUserDelete
@@ -391,13 +473,13 @@ const (
 	ActionMessageCreate
 	ActionMessageUpdate
 	ActionMessageDelete
-	ActionTaskComplete        Action = 13
-	ActionTaskApproveManual    Action = 14
-	ActionTaskFromScheduled   Action = 15
-	ActionTaskRejectManual    Action = 16
-	ActionMCPToolCall         Action = 20
-	ActionMCPPermissionManual Action = 21
-	ActionMCPPermissionAuto   Action = 22
+	ActionTaskComplete               Action = 13
+	ActionTaskApproveManual          Action = 14
+	ActionTaskFromScheduled          Action = 15
+	ActionTaskRejectManual           Action = 16
+	ActionMCPToolCall                Action = 20
+	ActionMCPPermissionManual        Action = 21
+	ActionMCPPermissionAuto          Action = 22
 	ActionTaskAllowAllCommandsToggle Action = 23
 )
 

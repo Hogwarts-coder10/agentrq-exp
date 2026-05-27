@@ -52,11 +52,18 @@ func (c *controller) emitEvent(ctx context.Context, e entity.CRUDEvent) {
 	if c.pubsub == nil {
 		return
 	}
+	if e.Origin == entity.OriginInvalid {
+		e.Origin = entity.GetOrigin(ctx)
+		if e.Origin == entity.OriginInvalid {
+			e.Origin = entity.OriginAPI
+		}
+	}
 	_, _ = c.pubsub.Publish(ctx, pubsub.PublishRequest{
 		PubSubID: entity.PubSubTopicCRUD,
 		Event:    e,
 	})
 }
+
 
 // WorkspaceController defines workspace operations.
 type WorkspaceController interface {

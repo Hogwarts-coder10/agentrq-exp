@@ -436,15 +436,29 @@ func (c *controller) ReplyToTask(ctx context.Context, req entity.ReplyToTaskRequ
 		attsData, _ = json.Marshal(req.Attachments)
 	}
 
-	// Create a new message from human
+	sender := "human"
+	var metadataJSON datatypes.JSON
+	if entity.GetOrigin(ctx) == entity.OriginSlack {
+		sender = "slack"
+		if req.SlackUser != "" {
+			metaMap := map[string]any{
+				"slack_user": req.SlackUser,
+			}
+			b, _ := json.Marshal(metaMap)
+			metadataJSON = datatypes.JSON(b)
+		}
+	}
+
+	// Create a new message from human/slack
 	msg := model.Message{
 		ID:          c.idgen.NextID(),
 		CreatedAt:   time.Now(),
 		TaskID:      m.ID,
 		UserID:      monoflake.IDFromBase62(req.UserID).Int64(),
-		Sender:      "human",
+		Sender:      sender,
 		Text:        req.Text,
 		Attachments: datatypes.JSON(attsData),
+		Metadata:    metadataJSON,
 	}
 	if err := c.repository.CreateMessage(ctx, msg); err != nil {
 		return nil, err

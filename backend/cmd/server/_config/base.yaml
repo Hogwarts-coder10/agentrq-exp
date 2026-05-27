@@ -27,6 +27,7 @@ auth:
   jwtSecret: ${AGENTRQ_AUTH_JWT_SECRET:agentrq-secret-change-me}
   rootAccessToken: ${AGENTRQ_AUTH_ROOT_ACCESS_TOKEN:agentrq}
   rootLoginEnabled: ${AGENTRQ_AUTH_ROOT_LOGIN_ENABLED:false}
+  workspaceTokenKey: ${AGENTRQ_AUTH_WORKSPACE_TOKEN_KEY:agentrq-token-key-change-me-32by}
   google:
     clientId: ${AGENTRQ_ACCOUNTS_OAUTH2_CLI_GOOGLE_CLIENT_ID}
     clientSecret: ${AGENTRQ_ACCOUNTS_OAUTH2_CLI_GOOGLE_CLIENT_SECRET}
@@ -41,3 +42,10 @@ smtp:
 
 pubsub:
   maxDurationForSubscriberToReceive: 5s
+
+slack:
+  enabled: ${AGENTRQ_SLACK_ENABLED:false}
+  signingSecret: "${AGENTRQ_SLACK_SIGNING_SECRET:}"
+  appId: "${AGENTRQ_SLACK_APP_ID:}"
+  clientId: "${AGENTRQ_SLACK_CLIENT_ID:}"
+  clientSecret: "${AGENTRQ_SLACK_CLIENT_SECRET:}"
