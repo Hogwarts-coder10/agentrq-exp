@@ -165,9 +165,9 @@
                         <p class="text-[11px] text-gray-600 dark:text-zinc-400 font-medium">2. Start the bridge:</p>
                         <div class="bg-white dark:bg-zinc-900 p-3 rounded-sm border border-gray-200 dark:border-zinc-700 flex items-center justify-between group shadow-sm overflow-hidden">
                           <div class="flex-1 min-w-0 overflow-x-auto no-scrollbar">
-                            <code class="text-[10px] text-gray-900 dark:text-white font-bold whitespace-nowrap">npx @agentrq/acp-gateway -- gemini acp</code>
+                            <code class="text-[10px] text-gray-900 dark:text-white font-bold whitespace-nowrap">npx @agentrq/acp-gateway -- gemini --acp</code>
                           </div>
-                          <button type="button" @click="copyToClipboard('npx @agentrq/acp-gateway -- gemini acp', 'gatewayStart')" class="text-[9px] font-bold uppercase tracking-widest pl-4 shrink-0 transition-colors" :class="copiedState.gatewayStart ? 'text-green-500' : 'text-gray-400 hover:text-black dark:hover:text-white'">
+                          <button type="button" @click="copyToClipboard('npx @agentrq/acp-gateway -- gemini --acp', 'gatewayStart')" class="text-[9px] font-bold uppercase tracking-widest pl-4 shrink-0 transition-colors" :class="copiedState.gatewayStart ? 'text-green-500' : 'text-gray-400 hover:text-black dark:hover:text-white'">
                             {{ copiedState.gatewayStart ? 'Copied!' : 'Copy' }}
                           </button>
                         </div>
