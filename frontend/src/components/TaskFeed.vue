@@ -23,7 +23,7 @@
         <div v-for="grp in displayGroups" :key="grp.title" class="mb-4">
           <div class="mb-3 flex items-center gap-3">
             <h3 class="text-[10px] font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-widest">{{ grp.title }}</h3>
-            <span class="text-[9px] font-bold text-gray-500 dark:text-zinc-500 bg-gray-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded-sm">{{ grp.title === 'Completed' ? grp.totalCompleted : grp.tasks.length }}</span>
+            <span class="text-[9px] font-bold text-gray-500 dark:text-zinc-500 bg-gray-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded-sm">{{ grp.totalCount !== undefined ? grp.totalCount : grp.tasks.length }}</span>
           </div>
           
           <div v-if="grp.tasks.length === 0" class="py-4 px-4 border border-dashed border-gray-200 dark:border-zinc-800 rounded-xl text-[11px] text-gray-500 dark:text-zinc-500 font-medium">
@@ -97,10 +97,10 @@
       </div>
       
       <!-- Sticky Load More Footer -->
-      <div v-if="displayGroups.find(g => g.hasMore)" class="sticky bottom-0 left-0 right-0 p-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-t border-gray-100 dark:border-zinc-800 z-30">
+      <div v-if="displayGroups.find(g => g.hasMore)" class="sticky bottom-0 left-0 right-0 p-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-t border-gray-100 dark:border-zinc-800 z-30 flex flex-col gap-1.5">
         <template v-for="grp in displayGroups" :key="'more-' + grp.title">
-          <button v-if="grp.hasMore" @click.stop="completedLimit += 5" class="w-full py-1.5 rounded-sm border border-dashed border-gray-200 dark:border-zinc-800 text-gray-500 dark:text-zinc-400 text-[10px] font-semibold hover:border-gray-300 dark:hover:border-zinc-700 hover:text-gray-900 dark:hover:text-zinc-50 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-all shadow-sm">
-            Load More ({{ grp.totalCompleted - completedLimit }} remaining)
+          <button v-if="grp.hasMore" @click.stop="grp.limitRef === 'notStartedLimit' ? notStartedLimit += 10 : completedLimit += 5" class="w-full py-1.5 rounded-sm border border-dashed border-gray-200 dark:border-zinc-800 text-gray-500 dark:text-zinc-400 text-[10px] font-semibold hover:border-gray-300 dark:hover:border-zinc-700 hover:text-gray-900 dark:hover:text-zinc-50 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-all shadow-sm">
+            Load More {{ grp.title }} ({{ grp.totalCount - (grp.limitRef === 'notStartedLimit' ? notStartedLimit : completedLimit) }} remaining)
           </button>
         </template>
       </div>
@@ -143,6 +143,7 @@ const taskToDeleteTitle = ref('');
 
 const localTasks = ref([...props.initialTasks]);
 const completedLimit = ref(5);
+const notStartedLimit = ref(10);
 
 watch(() => props.initialTasks, (newTasks) => {
   localTasks.value = [...newTasks];
@@ -307,7 +308,13 @@ const displayGroups = computed(() => {
     groups.push({ title: 'Ongoing', tasks: ongoing });
   }
   if (f === 'active' || f === 'notstarted') {
-    groups.push({ title: 'Not Started', tasks: notStarted });
+    groups.push({
+      title: 'Not Started',
+      tasks: notStarted.slice(0, notStartedLimit.value),
+      hasMore: notStarted.length > notStartedLimit.value,
+      totalCount: notStarted.length,
+      limitRef: 'notStartedLimit'
+    });
   }
 
   if (f === 'active') {
@@ -331,7 +338,8 @@ const displayGroups = computed(() => {
       title: 'Completed',
       tasks: completed.slice(0, completedLimit.value),
       hasMore: completed.length > completedLimit.value,
-      totalCompleted: completed.length
+      totalCount: completed.length,
+      limitRef: 'completedLimit'
     });
   }
 
