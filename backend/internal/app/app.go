@@ -41,6 +41,7 @@ import (
 	"github.com/agentrq/agentrq/backend/internal/service/server"
 	slacksvc "github.com/agentrq/agentrq/backend/internal/service/slack"
 	"github.com/agentrq/agentrq/backend/internal/service/smtp"
+	svclimit "github.com/agentrq/agentrq/backend/internal/service/ratelimit"
 	"github.com/agentrq/agentrq/backend/internal/service/storage"
 	"github.com/agentrq/agentrq/backend/internal/handler/api/middleware/ddos"
 	"github.com/agentrq/agentrq/backend/internal/handler/api/middleware/ratelimit"
@@ -192,6 +193,8 @@ func New(cfg Config) (*App, error) {
 		JWTSecret: cfg.Auth.JWTSecret,
 	})
 
+	rateLimiter := svclimit.New()
+
 	crudCtrl := crud.New(crud.Params{
 		IDGen:      ids,
 		Repository: repo,
@@ -199,6 +202,7 @@ func New(cfg Config) (*App, error) {
 		Image:      imgSvc,
 		PubSub:     pubsubSvc,
 		TokenKey:   cfg.Auth.WorkspaceTokenKey,
+		Limiter:    rateLimiter,
 	})
 
 	// ── Pub/Stats ─────────────────────────────────────────────────────────────

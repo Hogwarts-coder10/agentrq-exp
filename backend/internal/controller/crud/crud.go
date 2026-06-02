@@ -8,6 +8,7 @@ import (
 	"github.com/agentrq/agentrq/backend/internal/service/idgen"
 	"github.com/agentrq/agentrq/backend/internal/service/image"
 	"github.com/agentrq/agentrq/backend/internal/service/pubsub"
+	"github.com/agentrq/agentrq/backend/internal/service/ratelimit"
 	"github.com/agentrq/agentrq/backend/internal/service/storage"
 )
 
@@ -19,6 +20,7 @@ type (
 		Image      image.Service
 		PubSub     pubsub.Service
 		TokenKey   string
+		Limiter    ratelimit.Limiter
 	}
 
 	Controller interface {
@@ -34,6 +36,7 @@ type (
 		image      image.Service
 		pubsub     pubsub.Service
 		tokenKey   string
+		limiter    ratelimit.Limiter
 	}
 )
 
@@ -45,6 +48,7 @@ func New(p Params) Controller {
 		image:      p.Image,
 		pubsub:     p.PubSub,
 		tokenKey:   p.TokenKey,
+		limiter:    p.Limiter,
 	}
 }
 

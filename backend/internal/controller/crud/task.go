@@ -26,6 +26,11 @@ func (c *controller) ensureActiveWorkspace(ctx context.Context, id int64, userID
 }
 
 func (c *controller) CreateTask(ctx context.Context, req entity.CreateTaskRequest) (*entity.CreateTaskResponse, error) {
+	userID := monoflake.IDFromBase62(req.UserID).Int64()
+	if c.limiter != nil && !c.limiter.AllowTask(userID) {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+
 	w, err := c.ensureActiveWorkspace(ctx, req.Task.WorkspaceID, req.UserID)
 	if err != nil {
 		return nil, err
@@ -88,7 +93,7 @@ func (c *controller) CreateTask(ctx context.Context, req entity.CreateTaskReques
 		ID:           c.idgen.NextID(),
 		CreatedAt:    now,
 		UpdatedAt:    now,
-		UserID:       monoflake.IDFromBase62(req.UserID).Int64(),
+		UserID:       userID,
 		WorkspaceID:  req.Task.WorkspaceID,
 		CreatedBy:    req.Task.CreatedBy,
 		Assignee:     req.Task.Assignee,
@@ -141,10 +146,14 @@ func (c *controller) ListTasks(ctx context.Context, req entity.ListTasksRequest)
 }
 
 func (c *controller) RespondToTask(ctx context.Context, req entity.RespondToTaskRequest) (*entity.RespondToTaskResponse, error) {
+	uid := monoflake.IDFromBase62(req.UserID).Int64()
+	if c.limiter != nil && !c.limiter.AllowMessage(uid) {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+
 	if _, err := c.ensureActiveWorkspace(ctx, req.WorkspaceID, req.UserID); err != nil {
 		return nil, err
 	}
-	uid := monoflake.IDFromBase62(req.UserID).Int64()
 	m, err := c.repository.GetTask(ctx, req.WorkspaceID, req.TaskID, uid)
 	if err != nil {
 		return nil, err
@@ -419,10 +428,14 @@ func (c *controller) UpdateTaskAllowAllCommands(ctx context.Context, req entity.
 }
 
 func (c *controller) ReplyToTask(ctx context.Context, req entity.ReplyToTaskRequest) (*entity.ReplyToTaskResponse, error) {
+	uid := monoflake.IDFromBase62(req.UserID).Int64()
+	if c.limiter != nil && !c.limiter.AllowMessage(uid) {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+
 	if _, err := c.ensureActiveWorkspace(ctx, req.WorkspaceID, req.UserID); err != nil {
 		return nil, err
 	}
-	uid := monoflake.IDFromBase62(req.UserID).Int64()
 	m, err := c.repository.GetTask(ctx, req.WorkspaceID, req.TaskID, uid)
 	if err != nil {
 		return nil, err

@@ -22,6 +22,9 @@ func FromErrorToHTTPResponse(err error) ([]byte, int) {
 	if errors.Is(err, base.ErrNotFound) {
 		code = http.StatusNotFound
 		msg = "not found"
+	} else if err.Error() == "rate limit exceeded" {
+		code = http.StatusTooManyRequests
+		msg = "rate limit exceeded"
 	}
 
 	e := httpError{}

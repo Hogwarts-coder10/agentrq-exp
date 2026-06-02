@@ -14,12 +14,17 @@ import (
 )
 
 func (c *controller) CreateWorkspace(ctx context.Context, req entity.CreateWorkspaceRequest) (*entity.CreateWorkspaceResponse, error) {
+	userID := monoflake.IDFromBase62(req.UserID).Int64()
+	if c.limiter != nil && !c.limiter.AllowWorkspace(userID) {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+
 	now := time.Now()
 	m := model.Workspace{
 		ID:          c.idgen.NextID(),
 		CreatedAt:   now,
 		UpdatedAt:   now,
-		UserID:      monoflake.IDFromBase62(req.UserID).Int64(),
+		UserID:      userID,
 		Name:                 req.Workspace.Name,
 		Description:          req.Workspace.Description,
 		AllowAllCommands:     req.Workspace.AllowAllCommands,
