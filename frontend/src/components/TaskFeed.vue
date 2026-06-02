@@ -99,8 +99,8 @@
       <!-- Sticky Load More Footer -->
       <div v-if="displayGroups.find(g => g.hasMore)" class="sticky bottom-0 left-0 right-0 p-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-t border-gray-100 dark:border-zinc-800 z-30 flex flex-col gap-1.5">
         <template v-for="grp in displayGroups" :key="'more-' + grp.title">
-          <button v-if="grp.hasMore" @click.stop="grp.limitRef === 'notStartedLimit' ? notStartedLimit += 10 : completedLimit += 5" class="w-full py-1.5 rounded-sm border border-dashed border-gray-200 dark:border-zinc-800 text-gray-500 dark:text-zinc-400 text-[10px] font-semibold hover:border-gray-300 dark:hover:border-zinc-700 hover:text-gray-900 dark:hover:text-zinc-50 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-all shadow-sm">
-            Load More {{ grp.title }} ({{ grp.totalCount - (grp.limitRef === 'notStartedLimit' ? notStartedLimit : completedLimit) }} remaining)
+          <button v-if="grp.hasMore" @click.stop="fetchGroup(grp.category, true)" class="w-full py-1.5 rounded-sm border border-dashed border-gray-200 dark:border-zinc-800 text-gray-500 dark:text-zinc-400 text-[10px] font-semibold hover:border-gray-300 dark:hover:border-zinc-700 hover:text-gray-900 dark:hover:text-zinc-50 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-all shadow-sm">
+            Load More {{ grp.title }}
           </button>
         </template>
       </div>
@@ -114,7 +114,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import cronParser from 'cron-parser';
-import { deleteTask, respondToTask, updateTaskOrder, updateTaskStatus, sendPermissionVerdict, updateTaskAssignee } from '../api';
+import { deleteTask, respondToTask, updateTaskOrder, updateTaskStatus, sendPermissionVerdict, updateTaskAssignee, fetchTasks } from '../api';
 import { useCron } from '../composables/useCron';
 import DeleteModal from './DeleteModal.vue';
 import { useToasts } from '../composables/useToasts';
@@ -131,7 +131,7 @@ const props = defineProps({
   selectedTaskId: { type: [String, Number], default: null }
 });
 
-const emit = defineEmits(['filter-change']);
+const emit = defineEmits(['filter-change', 'tasks-updated']);
 
 const router = useRouter();
 const { notifyError, notifySuccess, notifyInfo } = useToasts();
@@ -141,13 +141,127 @@ const showDeleteModal = ref(false);
 const taskToDeleteId = ref(null);
 const taskToDeleteTitle = ref('');
 
-const localTasks = ref([...props.initialTasks]);
-const completedLimit = ref(5);
-const notStartedLimit = ref(10);
+const ongoingTasks = ref([]);
+const notStartedTasks = ref([]);
+const scheduledTasks = ref([]);
+const pendingTasks = ref([]);
+const completedTasks = ref([]);
 
-watch(() => props.initialTasks, (newTasks) => {
-  localTasks.value = [...newTasks];
-}, { deep: true });
+const ongoingOffset = ref(0);
+const notStartedOffset = ref(0);
+const scheduledOffset = ref(0);
+const pendingOffset = ref(0);
+const completedOffset = ref(0);
+
+const ongoingHasMore = ref(false);
+const notStartedHasMore = ref(false);
+const scheduledHasMore = ref(false);
+const pendingHasMore = ref(false);
+const completedHasMore = ref(false);
+
+const loadingTasks = ref(false);
+const PAGE_SIZE = 10;
+
+async function fetchGroup(category, isLoadMore = false) {
+  if (!isLoadMore) {
+    if (category === 'ongoing') { ongoingTasks.value = []; ongoingOffset.value = 0; ongoingHasMore.value = false; }
+    if (category === 'notstarted') { notStartedTasks.value = []; notStartedOffset.value = 0; notStartedHasMore.value = false; }
+    if (category === 'scheduled') { scheduledTasks.value = []; scheduledOffset.value = 0; scheduledHasMore.value = false; }
+    if (category === 'pending') { pendingTasks.value = []; pendingOffset.value = 0; pendingHasMore.value = false; }
+    if (category === 'completed') { completedTasks.value = []; completedOffset.value = 0; completedHasMore.value = false; }
+  }
+
+  let offset = 0;
+  if (category === 'ongoing') offset = ongoingOffset.value;
+  if (category === 'notstarted') offset = notStartedOffset.value;
+  if (category === 'scheduled') offset = scheduledOffset.value;
+  if (category === 'pending') offset = pendingOffset.value;
+  if (category === 'completed') offset = completedOffset.value;
+
+  try {
+    let res;
+    if (category === 'ongoing') {
+      res = await fetchTasks(props.workspaceId, { status: 'ongoing,blocked', limit: PAGE_SIZE, offset });
+      ongoingTasks.value = isLoadMore ? [...ongoingTasks.value, ...res.tasks] : res.tasks;
+      ongoingHasMore.value = res.tasks.length === PAGE_SIZE;
+      ongoingOffset.value += res.tasks.length;
+    } else if (category === 'notstarted') {
+      res = await fetchTasks(props.workspaceId, { status: 'notstarted', limit: PAGE_SIZE, offset });
+      notStartedTasks.value = isLoadMore ? [...notStartedTasks.value, ...res.tasks] : res.tasks;
+      notStartedHasMore.value = res.tasks.length === PAGE_SIZE;
+      notStartedOffset.value += res.tasks.length;
+    } else if (category === 'scheduled') {
+      res = await fetchTasks(props.workspaceId, { status: 'cron', limit: PAGE_SIZE, offset });
+      scheduledTasks.value = isLoadMore ? [...scheduledTasks.value, ...res.tasks] : res.tasks;
+      scheduledHasMore.value = res.tasks.length === PAGE_SIZE;
+      scheduledOffset.value += res.tasks.length;
+    } else if (category === 'pending') {
+      res = await fetchTasks(props.workspaceId, { filter: 'pending_approval', limit: PAGE_SIZE, offset });
+      pendingTasks.value = isLoadMore ? [...pendingTasks.value, ...res.tasks] : res.tasks;
+      pendingHasMore.value = res.tasks.length === PAGE_SIZE;
+      pendingOffset.value += res.tasks.length;
+    } else if (category === 'completed') {
+      res = await fetchTasks(props.workspaceId, { status: 'completed,rejected', limit: PAGE_SIZE, offset });
+      completedTasks.value = isLoadMore ? [...completedTasks.value, ...res.tasks] : res.tasks;
+      completedHasMore.value = res.tasks.length === PAGE_SIZE;
+      completedOffset.value += res.tasks.length;
+    }
+    emitUpdatedTasks();
+  } catch (err) {
+    notifyError(`Failed to fetch ${category} tasks: ` + err.message);
+  }
+}
+
+async function loadAllForFilter() {
+  loadingTasks.value = true;
+  const f = props.filter;
+  if (f === 'active') {
+    await Promise.all([
+      fetchGroup('ongoing'),
+      fetchGroup('notstarted'),
+      fetchGroup('scheduled')
+    ]);
+  } else if (f === 'notstarted') {
+    await fetchGroup('notstarted');
+  } else if (f === 'pending') {
+    await fetchGroup('pending');
+  } else if (f === 'ongoing') {
+    await fetchGroup('ongoing');
+  } else if (f === 'completed') {
+    await fetchGroup('completed');
+  } else if (f === 'scheduled') {
+    await fetchGroup('scheduled');
+  }
+  loadingTasks.value = false;
+}
+
+function emitUpdatedTasks() {
+  const allTasks = [
+    ...ongoingTasks.value,
+    ...notStartedTasks.value,
+    ...scheduledTasks.value,
+    ...pendingTasks.value,
+    ...completedTasks.value
+  ];
+  emit('tasks-updated', allTasks);
+}
+
+onMounted(() => {
+  loadAllForFilter();
+});
+
+watch(() => props.filter, () => {
+  loadAllForFilter();
+});
+
+watch(() => props.workspaceId, () => {
+  ongoingTasks.value = [];
+  notStartedTasks.value = [];
+  scheduledTasks.value = [];
+  pendingTasks.value = [];
+  completedTasks.value = [];
+  loadAllForFilter();
+});
 
 watch(() => props.liveEvents.length, (newLen, oldLen) => {
   if (newLen > oldLen) {
@@ -155,21 +269,45 @@ watch(() => props.liveEvents.length, (newLen, oldLen) => {
     fresh.forEach(ev => {
       if (ev.type === 'task.deleted') {
         const id = ev.payload.id;
-        localTasks.value = localTasks.value.filter(x => String(x.id) !== String(id));
+        ongoingTasks.value = ongoingTasks.value.filter(x => String(x.id) !== String(id));
+        notStartedTasks.value = notStartedTasks.value.filter(x => String(x.id) !== String(id));
+        scheduledTasks.value = scheduledTasks.value.filter(x => String(x.id) !== String(id));
+        pendingTasks.value = pendingTasks.value.filter(x => String(x.id) !== String(id));
+        completedTasks.value = completedTasks.value.filter(x => String(x.id) !== String(id));
+        emitUpdatedTasks();
         return;
       }
 
       if (ev.type === 'task.updated' || ev.type === 'task.created' || ev.type === 'status.updated' || ev.type === 'respond.ack') {
         const t = ev.payload;
-        const idx = localTasks.value.findIndex(x => String(x.id) === String(t.id));
-        if (idx !== -1) {
-          localTasks.value[idx] = t;
-        } else {
-          localTasks.value.push(t);
-          if (t.createdBy === 'agent') {
-            notifyInfo(`Agent defined a new task: ${t.title}`, 'New Task');
-          }
+        ongoingTasks.value = ongoingTasks.value.filter(x => String(x.id) !== String(t.id));
+        notStartedTasks.value = notStartedTasks.value.filter(x => String(x.id) !== String(t.id));
+        scheduledTasks.value = scheduledTasks.value.filter(x => String(x.id) !== String(t.id));
+        pendingTasks.value = pendingTasks.value.filter(x => String(x.id) !== String(t.id));
+        completedTasks.value = completedTasks.value.filter(x => String(x.id) !== String(t.id));
+
+        if (t.status === 'cron') {
+          scheduledTasks.value.push(t);
+        } else if (['completed', 'rejected'].includes(t.status)) {
+          completedTasks.value.push(t);
+        } else if (t.status === 'notstarted') {
+          notStartedTasks.value.push(t);
+        } else if (['ongoing', 'blocked'].includes(t.status)) {
+          ongoingTasks.value.push(t);
         }
+
+        const isPendingOnMe = t.status !== 'completed' && t.status !== 'rejected' && (
+          (t.status === 'notstarted' && t.assignee === 'human') ||
+          (t.messages && t.messages.some(m => m.metadata?.type === 'permission_request' && m.metadata?.status === 'pending'))
+        );
+        if (isPendingOnMe) {
+          pendingTasks.value.push(t);
+        }
+
+        if (ev.type === 'task.created' && t.createdBy === 'agent') {
+          notifyInfo(`Agent defined a new task: ${t.title}`, 'New Task');
+        }
+        emitUpdatedTasks();
       }
     });
   }
@@ -209,7 +347,6 @@ const handleAction = async (task, action) => {
       return;
     }
 
-    // Find the latest message that is a permission_request and has no verdict yet
     const pendingMsg = [...(task.messages || [])].reverse().find(m => 
       m.metadata?.type === 'permission_request' && 
       m.metadata?.status !== 'allow' && 
@@ -227,31 +364,12 @@ const handleAction = async (task, action) => {
   }
 };
 
-const emptyStateLabel = computed(() => {
-  switch (props.filter) {
-    case 'active':
-      return 'No active tasks found (includes not started and ongoing).';
-    case 'notstarted':
-      return 'No tasks waiting to start.';
-    case 'pending':
-      return 'No tasks pending your attention.';
-    case 'ongoing':
-      return 'No tasks currently in progress.';
-    case 'completed':
-      return 'No completed tasks found.';
-    case 'scheduled':
-      return 'No scheduled tasks configured.';
-    default:
-      return 'No tasks match this category.';
-  }
-});
-
 const displayGroups = computed(() => {
   const f = props.filter;
 
   if (f === 'scheduled') {
-    const cronTasks = localTasks.value.filter(t => t.status === 'cron').sort((a,b) => getTaskOrder(a) - getTaskOrder(b));
-    if (cronTasks.length === 0) return [{ title: 'Scheduled', tasks: [] }];
+    const cronTasks = [...scheduledTasks.value].sort((a,b) => getTaskOrder(a) - getTaskOrder(b));
+    if (cronTasks.length === 0) return [{ title: 'Scheduled', tasks: [], hasMore: scheduledHasMore.value, category: 'scheduled' }];
     
     const categories = [
       { label: 'Every 15 mins', values: ['*/15 * * * *'] },
@@ -268,121 +386,77 @@ const displayGroups = computed(() => {
     categories.forEach(cat => {
       const matched = cronTasks.filter(t => cat.values.includes(t.cronSchedule));
       if (matched.length > 0) {
-        grps.push({ title: cat.label, tasks: matched });
+        grps.push({ title: cat.label, tasks: matched, hasMore: false });
         matched.forEach(t => handledIds.add(t.id));
       }
     });
 
     const other = cronTasks.filter(t => !handledIds.has(t.id));
-    if (other.length > 0) grps.push({ title: 'Other', tasks: other });
+    if (other.length > 0) grps.push({ title: 'Other', tasks: other, hasMore: false });
+
+    if (grps.length > 0) {
+      grps[grps.length - 1].hasMore = scheduledHasMore.value;
+      grps[grps.length - 1].category = 'scheduled';
+    }
 
     return grps;
   }
 
-  // Filter tasks based on status
-  let filtered = localTasks.value.filter(t => t.status !== 'cron');
-  
-  if (f === 'active') {
-    filtered = filtered.filter(t => ['ongoing', 'blocked', 'notstarted'].includes(t.status));
-  } else if (f === 'notstarted') {
-    filtered = filtered.filter(t => t.status === 'notstarted');
-  } else if (f === 'ongoing') {
-    filtered = filtered.filter(t => ['ongoing', 'blocked'].includes(t.status));
-  } else if (f === 'pending') {
-    filtered = filtered.filter(t => 
-      t.status !== 'completed' && t.status !== 'rejected' && (
-        (t.status === 'notstarted' && t.assignee === 'human') ||
-        (t.messages && t.messages.some(m => m.metadata?.type === 'permission_request' && m.metadata?.status === 'pending'))
-      )
-    );
-  } else if (f === 'completed') {
-    filtered = filtered.filter(t => ['completed', 'rejected'].includes(t.status));
-  }
-
-  const ongoing = filtered.filter(t => ['ongoing', 'blocked'].includes(t.status)).sort((a,b) => getTaskOrder(b) - getTaskOrder(a));
-  const notStarted = filtered.filter(t => ['notstarted'].includes(t.status)).sort((a,b) => getTaskOrder(a) - getTaskOrder(b));
-  const completed = filtered.filter(t => ['completed', 'rejected'].includes(t.status)).sort((a,b) => getTaskOrder(b) - getTaskOrder(a));
-
   const groups = [];
   if (f === 'active' || f === 'ongoing') {
-    groups.push({ title: 'Ongoing', tasks: ongoing });
+    groups.push({ 
+      title: 'Ongoing', 
+      tasks: [...ongoingTasks.value].sort((a,b) => getTaskOrder(b) - getTaskOrder(a)),
+      hasMore: ongoingHasMore.value,
+      category: 'ongoing'
+    });
   }
   if (f === 'active' || f === 'notstarted') {
     groups.push({
       title: 'Not Started',
-      tasks: notStarted.slice(0, notStartedLimit.value),
-      hasMore: notStarted.length > notStartedLimit.value,
-      totalCount: notStarted.length,
-      limitRef: 'notStartedLimit'
+      tasks: [...notStartedTasks.value].sort((a,b) => getTaskOrder(a) - getTaskOrder(b)),
+      hasMore: notStartedHasMore.value,
+      category: 'notstarted'
     });
   }
 
   if (f === 'active') {
-    const cronTasks = localTasks.value.filter(t => t.status === 'cron');
-    const sortedCron = [...cronTasks].sort((a, b) => {
+    const sortedCron = [...scheduledTasks.value].sort((a, b) => {
       const aTime = getNextRunDate(a.cronSchedule).getTime();
       const bTime = getNextRunDate(b.cronSchedule).getTime();
       return aTime - bTime;
     });
-    if (sortedCron.length > 0) {
-      groups.push({ title: 'Scheduled', tasks: sortedCron });
-    }
+    groups.push({ 
+      title: 'Scheduled', 
+      tasks: sortedCron,
+      hasMore: scheduledHasMore.value,
+      category: 'scheduled'
+    });
   }
 
   if (f === 'pending') {
-    groups.push({ title: 'Action Required', tasks: filtered.sort((a,b) => getTaskOrder(b) - getTaskOrder(a)) });
+    groups.push({ 
+      title: 'Action Required', 
+      tasks: [...pendingTasks.value].sort((a,b) => getTaskOrder(b) - getTaskOrder(a)),
+      hasMore: pendingHasMore.value,
+      category: 'pending'
+    });
   }
 
   if (f === 'completed') {
     groups.push({
       title: 'Completed',
-      tasks: completed.slice(0, completedLimit.value),
-      hasMore: completed.length > completedLimit.value,
-      totalCount: completed.length,
-      limitRef: 'completedLimit'
+      tasks: [...completedTasks.value].sort((a,b) => getTaskOrder(b) - getTaskOrder(a)),
+      hasMore: completedHasMore.value,
+      category: 'completed'
     });
   }
 
   return groups;
 });
 
-const pendingInputCount = computed(() => {
-  return localTasks.value.filter(t => 
-    t.status !== 'completed' && t.status !== 'rejected' && (
-      (t.status === 'notstarted' && t.assignee === 'human') ||
-      (t.messages && t.messages.some(m => m.metadata?.type === 'permission_request' && m.metadata?.status === 'pending'))
-    )
-  ).length;
-});
-
-const scheduledCount = computed(() => {
-  return localTasks.value.filter(t => t.status === 'cron').length;
-});
-
-const activeTaskCount = computed(() => {
-  return localTasks.value.length - scheduledCount.value;
-});
-
-function getTaskBgStyle(t) {
-  const isSelected = String(props.selectedTaskId) === String(t.id);
-  if (isSelected) {
-    if (t.status === 'ongoing') return 'bg-yellow-50 dark:bg-yellow-900/10 border-l-yellow-400 dark:border-l-yellow-500 shadow-sm';
-    if (t.status === 'blocked') return 'bg-red-50 dark:bg-red-900/10 border-l-red-400 dark:border-l-red-500 shadow-sm';
-    if (t.status === 'completed') return 'bg-gray-50 dark:bg-zinc-900 border-l-gray-900 dark:border-l-zinc-100 shadow-sm';
-    if (t.status === 'cron') return 'bg-sky-50 dark:bg-sky-900/10 border-l-sky-400 dark:border-l-sky-500 shadow-sm';
-    return 'bg-white dark:bg-zinc-800 border-l-gray-400 dark:border-l-gray-500 shadow-sm';
-  }
-  
-  if (t.status === 'ongoing') return 'bg-yellow-50/50 dark:bg-yellow-900/5 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 hover:shadow-sm';
-  if (t.status === 'blocked') return 'bg-red-50/50 dark:bg-red-900/5 hover:bg-red-50 dark:hover:bg-red-900/20 hover:shadow-sm';
-  if (t.status === 'completed') return 'bg-gray-50/50 dark:bg-zinc-900/5 hover:bg-gray-100 dark:hover:bg-zinc-800/80 hover:shadow-sm';
-  if (t.status === 'cron') return 'bg-sky-50/50 dark:bg-sky-900/5 hover:bg-sky-50 dark:hover:bg-sky-900/20 hover:shadow-sm';
-  return 'bg-white/40 dark:bg-zinc-900/30 hover:bg-white dark:hover:bg-zinc-900/80 hover:shadow-sm';
-}
-
 function getTaskDotStyle(t) {
   const status = typeof t === 'string' ? t : t.status;
-  // If it's the task object, check if it's "Pending on Me"
   const isPendingOnMe = typeof t === 'object' && t.status !== 'completed' && t.status !== 'rejected' && (
     (t.status === 'notstarted' && t.assignee === 'human') ||
     (t.messages && t.messages.some(m => m.metadata?.type === 'permission_request' && m.metadata?.status === 'pending'))
@@ -410,20 +484,6 @@ function getTaskDotStyle(t) {
   }
 }
 
-function getTaskBadgeStyle(status) {
-  if (status === 'ongoing') return 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-500 border-yellow-200 dark:border-yellow-500/30';
-  if (status === 'blocked') return 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-500 border-red-200 dark:border-red-500/30';
-  if (status === 'completed') return 'bg-gray-900 dark:bg-white text-white dark:text-black border-black dark:border-white';
-  if (status === 'cron') return 'bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-500 border-sky-200 dark:border-sky-500/30';
-  return 'bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400 border-gray-200 dark:border-zinc-700';
-}
-
-function getTaskLabel(status) {
-  if (status === 'notstarted') return 'NOT STARTED';
-  if (status === 'cron') return 'SCHEDULED';
-  return status;
-}
-
 function startCreate() {
   router.push(`/workspaces/${props.workspaceId}/tasks/new`);
 }
@@ -437,7 +497,6 @@ function openTask(task) {
     });
     return;
   }
-  // This router push will now load inside the WorkspaceDetailView's router-view
   router.push({
     path: `/workspaces/${props.workspaceId}/tasks/${task.id}`,
     query
@@ -446,22 +505,6 @@ function openTask(task) {
 
 function triggerEdit(task) {
   router.push(`/workspaces/${props.workspaceId}/tasks/${task.id}/edit`);
-}
-
-async function respond(taskId, action) {
-  try {
-    let res;
-    if (['notstarted', 'ongoing', 'completed', 'rejected'].includes(action)) {
-        res = await updateTaskStatus(props.workspaceId, taskId, action);
-    } else {
-        res = await respondToTask(props.workspaceId, taskId, action, '');
-    }
-    const idx = localTasks.value.findIndex(x => x.id === taskId);
-    if (idx !== -1) localTasks.value[idx] = res.task;
-    notifySuccess('Status updated successfully');
-  } catch(err) {
-    notifyError("Failed to update status: " + err.message);
-  }
 }
 
 async function triggerDelete(task) {
@@ -481,7 +524,12 @@ async function onDeleteConfirm() {
   if (!taskId) return;
   try {
     await deleteTask(props.workspaceId, taskId);
-    localTasks.value = localTasks.value.filter(x => x.id !== taskId);
+    ongoingTasks.value = ongoingTasks.value.filter(x => x.id !== taskId);
+    notStartedTasks.value = notStartedTasks.value.filter(x => x.id !== taskId);
+    scheduledTasks.value = scheduledTasks.value.filter(x => x.id !== taskId);
+    pendingTasks.value = pendingTasks.value.filter(x => x.id !== taskId);
+    completedTasks.value = completedTasks.value.filter(x => x.id !== taskId);
+    emitUpdatedTasks();
     notifySuccess('Task deleted');
     if (String(props.selectedTaskId) === String(taskId)) {
       router.push(`/workspaces/${props.workspaceId}`);
@@ -509,8 +557,9 @@ async function reorderTask(task, direction) {
   
   try {
     const res = await updateTaskOrder(props.workspaceId, task.id, newOrder);
-    const localIdx = localTasks.value.findIndex(x => x.id === task.id);
-    if (localIdx !== -1) localTasks.value[localIdx] = res.task;
+    if (direction === -1 || direction === 1) {
+      await fetchGroup('notstarted');
+    }
   } catch (err) {
     notifyError('Reorder Error: ' + err.message);
   }

@@ -56,8 +56,14 @@ export async function deleteWorkspace(id) {
   return true;
 }
 
-export async function fetchTasks(workspaceId) {
-  const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/tasks`);
+export async function fetchTasks(workspaceId, { status, filter, limit = 10, offset = 0 } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.append('status', status);
+  if (filter) params.append('filter', filter);
+  if (limit) params.append('limit', limit);
+  if (offset) params.append('offset', offset);
+
+  const res = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/tasks?${params.toString()}`);
   if (!res.ok) throw new Error('Failed to fetch tasks');
   return res.json();
 }

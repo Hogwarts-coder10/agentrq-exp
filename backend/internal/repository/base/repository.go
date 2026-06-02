@@ -164,18 +164,6 @@ func (r *repository) ListTasks(ctx context.Context, req entity.ListTasksRequest,
 	var tasks []model.Task
 	q := r.conn(ctx).Where("user_id = ?", userID)
 
-	if req.PreloadMessages {
-		var metadataExpr string
-		if r.conn(ctx).Dialector.Name() == "postgres" {
-			metadataExpr = "metadata @> '{\"type\":\"permission_request\",\"status\":\"pending\"}'::jsonb"
-		} else {
-			metadataExpr = "metadata LIKE '%\"type\":\"permission_request\"%' AND metadata LIKE '%\"status\":\"pending\"%'"
-		}
-		q = q.Preload("Messages", func(db *gorm.DB) *gorm.DB {
-			return db.Where("id = (SELECT MAX(id) FROM messages m2 WHERE m2.task_id = messages.task_id) OR (" + metadataExpr + ")").Order("created_at asc")
-		})
-	}
-
 	if req.WorkspaceID != 0 {
 		q = q.Where("workspace_id = ?", req.WorkspaceID)
 	}
@@ -230,7 +218,52 @@ func (r *repository) ListTasks(ctx context.Context, req entity.ListTasksRequest,
 	}
 
 	err := q.Order(orderBy).Find(&tasks).Error
-	return tasks, err
+	if err != nil {
+		return nil, err
+	}
+
+	if req.PreloadMessages && len(tasks) > 0 {
+		var metadataExpr string
+		if r.conn(ctx).Dialector.Name() == "postgres" {
+			metadataExpr = "metadata @> '{\"type\":\"permission_request\",\"status\":\"pending\"}'::jsonb"
+		} else {
+			metadataExpr = "metadata LIKE '%\"type\":\"permission_request\"%' AND metadata LIKE '%\"status\":\"pending\"%'"
+		}
+
+		taskIDs := make([]int64, len(tasks))
+		taskMap := make(map[int64]*model.Task, len(tasks))
+		for i := range tasks {
+			taskIDs[i] = tasks[i].ID
+			taskMap[tasks[i].ID] = &tasks[i]
+		}
+
+		const chunkSize = 500
+		for i := 0; i < len(taskIDs); i += chunkSize {
+			end := i + chunkSize
+			if end > len(taskIDs) {
+				end = len(taskIDs)
+			}
+			batch := taskIDs[i:end]
+
+			var batchMessages []model.Message
+			err := r.conn(ctx).
+				Where("task_id IN ?", batch).
+				Where("id = (SELECT MAX(id) FROM messages m2 WHERE m2.task_id = messages.task_id) OR (" + metadataExpr + ")").
+				Order("created_at asc").
+				Find(&batchMessages).Error
+			if err != nil {
+				return nil, err
+			}
+
+			for _, msg := range batchMessages {
+				if t, ok := taskMap[msg.TaskID]; ok {
+					t.Messages = append(t.Messages, msg)
+				}
+			}
+		}
+	}
+
+	return tasks, nil
 }
 
 func (r *repository) GetNextTask(ctx context.Context, workspaceID int64, userID int64) (model.Task, error) {

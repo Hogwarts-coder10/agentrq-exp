@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	entity "github.com/agentrq/agentrq/backend/internal/data/entity/crud"
 	"github.com/agentrq/agentrq/backend/internal/data/model"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -167,5 +168,59 @@ func TestRepository_UpdateMessageMetadata(t *testing.T) {
 	db.First(&m, messageID)
 	if string(m.Metadata) == `{"hacked":true}` {
 		t.Error("vulnerability detected: metadata was updated with wrong taskID")
+	}
+}
+
+func TestRepository_ListTasks_PreloadMessages(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("failed to connect database: %v", err)
+	}
+
+	_ = db.AutoMigrate(&model.Task{}, &model.Message{})
+	repo := New(&mockDB{db: db})
+
+	ctx := context.Background()
+	workspaceID := int64(1)
+	userID := int64(10)
+
+	// Create 12 tasks to test batching and limits
+	for i := int64(1); i <= 12; i++ {
+		db.Create(&model.Task{
+			ID:          i,
+			WorkspaceID: workspaceID,
+			UserID:      userID,
+			Title:       "Task",
+			Status:      "notstarted",
+		})
+
+		// Create a message for the task
+		db.Create(&model.Message{
+			ID:     100 + i,
+			TaskID: i,
+			Text:   "Initial msg for task",
+		})
+	}
+
+	// Case 1: Fetch tasks with PreloadMessages=true
+	req := entity.ListTasksRequest{
+		WorkspaceID:     workspaceID,
+		PreloadMessages: true,
+		Limit:           10,
+	}
+
+	tasks, err := repo.ListTasks(ctx, req, userID)
+	if err != nil {
+		t.Fatalf("ListTasks failed: %v", err)
+	}
+
+	if len(tasks) != 10 {
+		t.Errorf("expected 10 tasks, got %d", len(tasks))
+	}
+
+	for _, task := range tasks {
+		if len(task.Messages) != 1 {
+			t.Errorf("expected 1 preloaded message for task %d, got %d", task.ID, len(task.Messages))
+		}
 	}
 }

@@ -102,6 +102,7 @@
             :filter="activeFilter"
             :selectedTaskId="selectedTaskId"
             @filter-change="activeFilter = $event"
+            @tasks-updated="tasks = $event"
           />
         </div>
         </div>
@@ -144,7 +145,7 @@
         <template v-else>
           <div class="w-16 h-16 bg-white dark:bg-zinc-800 rounded-sm border border-gray-100 dark:border-zinc-700 flex items-center justify-center mb-5 shadow-sm">
             <svg class="w-8 h-8 text-gray-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
             </svg>
           </div>
           <h3 class="text-xl font-black text-gray-800 dark:text-zinc-100 tracking-tight">Select a task</h3>
@@ -246,11 +247,6 @@ watch(events, (evts) => {
   if (last.type === 'agent.connected') {
     isAgentConnected.value = last.payload.connected;
   }
-  
-  // Refresh tasks if something changed
-  if (['task.created', 'task.updated', 'status.updated', 'task.deleted', 'respond.ack'].includes(last.type)) {
-    load(false);
-  }
 }, { deep: true });
 
 watch(isConnected, (val, old) => {
@@ -263,11 +259,7 @@ watch(isConnected, (val, old) => {
 async function load(showLoading = true) {
   if (showLoading) loading.value = true;
   try {
-    const [pRes, tRes] = await Promise.all([
-      getWorkspace(workspaceId.value),
-      fetchTasks(workspaceId.value)
-    ]);
-    tasks.value = tRes.tasks || [];
+    const pRes = await getWorkspace(workspaceId.value);
     localWorkspace.value = pRes.workspace;
     workspaceStore.updateWorkspaceMetadata(pRes.workspace);
     isAgentConnected.value = workspace.value?.agentConnected;
