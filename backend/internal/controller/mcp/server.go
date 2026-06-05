@@ -51,6 +51,7 @@ type UpdateWorkspaceAutoAllowedToolsFunc func(ctx context.Context, tools []strin
 
 type PermissionRequestParams struct {
 	RequestID    string `json:"request_id"`
+	TaskID       string `json:"task_id,omitempty"`
 	ToolName     string `json:"tool_name"`
 	Description  string `json:"description"`
 	InputPreview string `json:"input_preview"`
@@ -86,6 +87,8 @@ type WorkspaceServer struct {
 	sessionTasksMu        sync.RWMutex
 	sessionTasks          map[string]int64 // sessionID -> taskID
 
+	requestTaskIDsMu      sync.RWMutex
+	requestTaskIDs        map[string]int64 // requestID -> taskID (resolved at request time)
 	permissionResponsesMu sync.RWMutex
 	permissionResponses   map[string]int64 // requestID -> messageID
 	metadataMu            sync.RWMutex
@@ -176,6 +179,7 @@ func NewWorkspaceServer(
 		requestTools:          make(map[string]string),
 		requestParams:         make(map[string]*PermissionRequestParams),
 		sessionTasks:          make(map[string]int64),
+		requestTaskIDs:        make(map[string]int64),
 		permissionResponses:   make(map[string]int64),
 		icon:                  icon,
 		name:                  name,
@@ -993,30 +997,44 @@ func (ps *WorkspaceServer) notificationMiddleware(next mcp.MethodHandler) mcp.Me
 				zlog.Info().Str("request_id", p.RequestID).Str("tool", p.ToolName).Msg("auto-allowing permission request")
 				go func() {
 					time.Sleep(100 * time.Millisecond) // Give session time to stabilize if needed
-					_ = ps.SendPermissionVerdict(context.Background(), p.RequestID, "allow")
+					_ = ps.SendPermissionVerdict(context.Background(), 0, p.RequestID, "allow")
 				}()
 				ps.emitTelemetry(context.Background(), ActionMCPNotification, "permission_auto_allow")
 				return nil, nil
 			}
 
-			ps.sessionTasksMu.RLock()
-			taskID, ok := ps.sessionTasks[sessID]
-			ps.sessionTasksMu.RUnlock()
+			// Resolve taskID: first from the payload, then from the session, then from the DB.
+			var taskID int64
+			ok := false
 
-			// Fallback: after a server restart the sessionTasks map is empty.
-			// Query the DB for the workspace's current ongoing task — there can only be one.
+			// 1. From the incoming payload
+			if p.TaskID != "" {
+				if id := monoflake.IDFromBase62(p.TaskID); id != 0 {
+					if _, err := ps.getTask(ctx, id.Int64()); err == nil {
+						taskID = id.Int64()
+						ok = true
+					}
+				}
+			}
+
+			// 2. From the session mapping
 			if !ok {
-				if tasks, err := ps.listTasks(ctx, ListTasksFilter{Status: []string{"ongoing"}, Limit: 1}); err == nil {
+				ps.sessionTasksMu.RLock()
+				taskID, ok = ps.sessionTasks[sessID]
+				ps.sessionTasksMu.RUnlock()
+			}
+
+			// 3. Fallback: query the DB for the workspace's current ongoing or blocked task.
+			if !ok {
+				if tasks, err := ps.listTasks(ctx, ListTasksFilter{Status: []string{"ongoing", "blocked"}, Limit: 1}); err == nil {
 					for _, t := range tasks {
-						if t.Status == "ongoing" {
-							taskID = t.ID
-							ok = true
-							ps.sessionTasksMu.Lock()
-							ps.sessionTasks[sessID] = taskID
-							ps.sessionTasksMu.Unlock()
-							zlog.Debug().Str("session_id", sessID).Int64("task_id", taskID).Msg("Session not found; resolved ongoing task from DB")
-							break
-						}
+						taskID = t.ID
+						ok = true
+						ps.sessionTasksMu.Lock()
+						ps.sessionTasks[sessID] = taskID
+						ps.sessionTasksMu.Unlock()
+						zlog.Debug().Str("session_id", sessID).Int64("task_id", taskID).Msg("Session not found; resolved task from DB")
+						break
 					}
 				}
 			}
@@ -1027,7 +1045,7 @@ func (ps *WorkspaceServer) notificationMiddleware(next mcp.MethodHandler) mcp.Me
 					zlog.Info().Str("request_id", p.RequestID).Int64("task_id", taskID).Msg("auto-allowing permission request (task level)")
 					go func() {
 						time.Sleep(100 * time.Millisecond) // Give session time to stabilize if needed
-						_ = ps.SendPermissionVerdict(context.Background(), p.RequestID, "allow")
+						_ = ps.SendPermissionVerdict(context.Background(), taskID, p.RequestID, "allow")
 					}()
 					ps.emitTelemetry(context.Background(), ActionMCPNotification, "permission_auto_allow")
 					return nil, nil
@@ -1043,6 +1061,11 @@ func (ps *WorkspaceServer) notificationMiddleware(next mcp.MethodHandler) mcp.Me
 					"input_preview": p.InputPreview,
 					"status":        "pending",
 				}
+				// Store resolved taskID with the request for later use in SendPermissionVerdict
+				ps.requestTaskIDsMu.Lock()
+				ps.requestTaskIDs[p.RequestID] = taskID
+				ps.requestTaskIDsMu.Unlock()
+
 				msgID, _ := ps.reply(ctx, monoflake.ID(taskID).String(), fmt.Sprintf("Permission requested for %s: %s", p.ToolName, p.Description), nil, metadata)
 				if msgID != 0 {
 					ps.permissionResponsesMu.Lock()
@@ -1071,12 +1094,16 @@ func (ps *WorkspaceServer) cleanupRequest(requestID string) {
 	delete(ps.requestParams, requestID)
 	ps.requestParamsMu.Unlock()
 
+	ps.requestTaskIDsMu.Lock()
+	delete(ps.requestTaskIDs, requestID)
+	ps.requestTaskIDsMu.Unlock()
+
 	ps.permissionResponsesMu.Lock()
 	delete(ps.permissionResponses, requestID)
 	ps.permissionResponsesMu.Unlock()
 }
 
-func (ps *WorkspaceServer) SendPermissionVerdict(ctx context.Context, requestID string, behavior string) error {
+func (ps *WorkspaceServer) SendPermissionVerdict(ctx context.Context, taskID int64, requestID string, behavior string) error {
 	defer ps.cleanupRequest(requestID)
 
 	ps.permissionRequestsMu.RLock()
@@ -1087,9 +1114,46 @@ func (ps *WorkspaceServer) SendPermissionVerdict(ctx context.Context, requestID 
 		return fmt.Errorf("unknown request ID (expired): %s", requestID)
 	}
 
-	ps.sessionTasksMu.RLock()
-	taskID, okTask := ps.sessionTasks[sessID]
-	ps.sessionTasksMu.RUnlock()
+	var okTask bool
+	if taskID != 0 {
+		// Validate that the supplied taskID belongs to this workspace
+		if _, err := ps.getTask(ctx, taskID); err != nil {
+			zlog.Warn().Int64("task_id", taskID).Err(err).Msg("supplied taskID not found in workspace, falling back")
+			taskID = 0
+		} else {
+			okTask = true
+		}
+	}
+
+	// Use the taskID stored when the permission request first came in
+	if !okTask {
+		ps.requestTaskIDsMu.RLock()
+		if storedTaskID, found := ps.requestTaskIDs[requestID]; found && storedTaskID != 0 {
+			taskID = storedTaskID
+			okTask = true
+		}
+		ps.requestTaskIDsMu.RUnlock()
+	}
+
+	// Fallback to session-based lookup
+	if !okTask {
+		ps.sessionTasksMu.RLock()
+		taskID, okTask = ps.sessionTasks[sessID]
+		ps.sessionTasksMu.RUnlock()
+	}
+
+	// Fallback: if still not found, query the DB
+	// for the first ongoing or blocked task in the workspace.
+	if !okTask {
+		if tasks, err := ps.listTasks(ctx, ListTasksFilter{Status: []string{"ongoing", "blocked"}, Limit: 1}); err == nil {
+			for _, t := range tasks {
+				taskID = t.ID
+				okTask = true
+				zlog.Debug().Int64("task_id", taskID).Str("session_id", sessID).Msg("SendPermissionVerdict: resolved task from DB fallback")
+				break
+			}
+		}
+	}
 
 	effectiveBehavior := behavior
 	if behavior == "allow_always" {
@@ -1209,32 +1273,44 @@ func (ps *WorkspaceServer) HandleCustomNotification(ctx context.Context, session
 			zlog.Info().Str("request_id", p.RequestID).Str("tool", p.ToolName).Msg("auto-allowing permission request (via custom notification)")
 			go func() {
 				time.Sleep(100 * time.Millisecond)
-				_ = ps.SendPermissionVerdict(context.Background(), p.RequestID, "allow")
+				_ = ps.SendPermissionVerdict(context.Background(), 0, p.RequestID, "allow")
 			}()
 			ps.emitTelemetry(context.Background(), ActionMCPNotification, "permission_auto_allow")
 			return
 		}
 
-		ps.sessionTasksMu.RLock()
-		taskID, ok := ps.sessionTasks[sessionID]
-		ps.sessionTasksMu.RUnlock()
+		// Resolve taskID: first from the payload, then from the session, then from the DB.
+		var taskID int64
+		ok := false
 
-		// Fallback: if session mapping is missing (e.g. after a server restart),
-		// query the DB for the workspace's current ongoing task.
-		// Only one ongoing task is allowed, so this is always unambiguous.
+		// 1. From the incoming payload
+		if p.TaskID != "" {
+			if id := monoflake.IDFromBase62(p.TaskID); id != 0 {
+				if _, err := ps.getTask(ctx, id.Int64()); err == nil {
+					taskID = id.Int64()
+					ok = true
+				}
+			}
+		}
+
+		// 2. From the session mapping
 		if !ok {
-			if tasks, err := ps.listTasks(ctx, ListTasksFilter{Status: []string{"ongoing"}, Limit: 1}); err == nil {
+			ps.sessionTasksMu.RLock()
+			taskID, ok = ps.sessionTasks[sessionID]
+			ps.sessionTasksMu.RUnlock()
+		}
+
+		// 3. Fallback: query the DB for the workspace's current ongoing or blocked task.
+		if !ok {
+			if tasks, err := ps.listTasks(ctx, ListTasksFilter{Status: []string{"ongoing", "blocked"}, Limit: 1}); err == nil {
 				for _, t := range tasks {
-					if t.Status == "ongoing" {
-						taskID = t.ID
-						ok = true
-						// Re-populate the session mapping to avoid future DB hits.
-						ps.sessionTasksMu.Lock()
-						ps.sessionTasks[sessionID] = taskID
-						ps.sessionTasksMu.Unlock()
-						zlog.Debug().Str("session_id", sessionID).Int64("task_id", taskID).Msg("Session not found; resolved ongoing task from DB")
-						break
-					}
+					taskID = t.ID
+					ok = true
+					ps.sessionTasksMu.Lock()
+					ps.sessionTasks[sessionID] = taskID
+					ps.sessionTasksMu.Unlock()
+					zlog.Debug().Str("session_id", sessionID).Int64("task_id", taskID).Msg("Session not found; resolved task from DB")
+					break
 				}
 			}
 		}
@@ -1247,7 +1323,7 @@ func (ps *WorkspaceServer) HandleCustomNotification(ctx context.Context, session
 				zlog.Info().Str("request_id", p.RequestID).Int64("task_id", taskID).Str("session_id", sessionID).Msg("auto-allowing permission request (task level, custom notification)")
 				go func() {
 					time.Sleep(100 * time.Millisecond)
-					_ = ps.SendPermissionVerdict(context.Background(), p.RequestID, "allow")
+					_ = ps.SendPermissionVerdict(context.Background(), taskID, p.RequestID, "allow")
 				}()
 				ps.emitTelemetry(context.Background(), ActionMCPNotification, "permission_auto_allow")
 				return
@@ -1262,6 +1338,11 @@ func (ps *WorkspaceServer) HandleCustomNotification(ctx context.Context, session
 				"input_preview": p.InputPreview,
 				"status":        "pending",
 			}
+			// Store resolved taskID with the request for later use in SendPermissionVerdict
+			ps.requestTaskIDsMu.Lock()
+			ps.requestTaskIDs[p.RequestID] = taskID
+			ps.requestTaskIDsMu.Unlock()
+
 			msgID, _ := ps.reply(ctx, monoflake.ID(taskID).String(), fmt.Sprintf("Permission requested for %s: %s", p.ToolName, p.Description), nil, metadata)
 			if msgID != 0 {
 				ps.permissionResponsesMu.Lock()

@@ -26,7 +26,7 @@ import (
 // MCPManager is a minimal interface so the Slack controller can dispatch
 // permission verdicts and channel notifications without importing the full mcp.Manager.
 type MCPManager interface {
-	SendPermissionVerdict(ctx context.Context, workspaceID int64, userID string, requestID, behavior string) error
+	SendPermissionVerdict(ctx context.Context, workspaceID int64, userID string, taskID int64, requestID, behavior string) error
 	SendChannelNotification(ctx context.Context, workspaceID int64, userID string, taskID int64, content string)
 }
 
@@ -773,7 +773,7 @@ func (c *controller) HandleMCPPermission(ctx context.Context, action SlackBlockA
 		}
 	}
 
-	if err := c.mcp.SendPermissionVerdict(ctx, workspaceID, ownerID, requestID, behavior); err != nil {
+	if err := c.mcp.SendPermissionVerdict(ctx, workspaceID, ownerID, taskID, requestID, behavior); err != nil {
 		errMsg := err.Error()
 		var updateErr error
 		if strings.Contains(errMsg, "expired") {

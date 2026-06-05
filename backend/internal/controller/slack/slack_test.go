@@ -72,7 +72,7 @@ func (m *mockCRUD) CheckWorkspaceAccess(ctx context.Context, id int64, userID st
 
 type mockMCP struct{}
 
-func (m *mockMCP) SendPermissionVerdict(ctx context.Context, workspaceID int64, userID string, requestID, behavior string) error {
+func (m *mockMCP) SendPermissionVerdict(ctx context.Context, workspaceID int64, userID string, taskID int64, requestID, behavior string) error {
 	return nil
 }
 

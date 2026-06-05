@@ -519,7 +519,14 @@ func (h *handler) sendPermissionVerdict() fiber.Handler {
 			return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "mcp server not found"})
 		}
 
-		if err := srv.SendPermissionVerdict(c.Context(), rq.RequestID, rq.Behavior); err != nil {
+		var taskID int64
+		if idParam := c.Params("taskID"); idParam != "" {
+			if id := monoflake.IDFromBase62(idParam); id != 0 {
+				taskID = id.Int64()
+			}
+		}
+
+		if err := srv.SendPermissionVerdict(c.Context(), taskID, rq.RequestID, rq.Behavior); err != nil {
 			if strings.Contains(err.Error(), "(expired)") {
 				return c.Status(http.StatusGone).JSON(fiber.Map{"error": "This action request has expired (server was likely restarted). The agent must re-request this action."})
 			}
