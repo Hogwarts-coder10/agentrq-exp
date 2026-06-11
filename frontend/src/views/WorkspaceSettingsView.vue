@@ -246,7 +246,7 @@
                             <span class="text-xs font-bold text-gray-700 dark:text-zinc-200">{{ evt.label }}</span>
                           </div>
                           <div class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" v-model="form.notification_settings[evt.key]" class="sr-only peer" />
+                            <input type="checkbox" v-model="form.notificationSettings[evt.key]" class="sr-only peer" />
                             <div class="w-10 h-6 bg-gray-200 dark:bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black dark:peer-checked:bg-white dark:peer-checked:after:bg-zinc-900"></div>
                           </div>
                         </label>
@@ -257,13 +257,13 @@
                       <h3 class="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest ml-1 mb-4">Delivery Channels</h3>
                       <div class="flex flex-wrap gap-3">
                         <label class="flex items-center gap-3 px-4 py-2.5 rounded-sm cursor-pointer transition-all shadow-sm border"
-                               :class="form.notification_settings.channels.includes('email') ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-100 dark:border-indigo-500/20 hover:bg-indigo-100 dark:hover:bg-indigo-500/20' : 'bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 hover:bg-gray-100 dark:hover:bg-zinc-700'">
+                               :class="form.notificationSettings.channels.includes('email') ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-100 dark:border-indigo-500/20 hover:bg-indigo-100 dark:hover:bg-indigo-500/20' : 'bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 hover:bg-gray-100 dark:hover:bg-zinc-700'">
                           <input type="checkbox"
-                                 :checked="form.notification_settings.channels.includes('email')"
-                                 @change="e => { const ch = form.notification_settings.channels; e.target.checked ? ch.push('email') : form.notification_settings.channels = ch.filter(c => c !== 'email') }"
+                                 :checked="form.notificationSettings.channels.includes('email')"
+                                 @change="e => { const ch = form.notificationSettings.channels; e.target.checked ? ch.push('email') : form.notificationSettings.channels = ch.filter(c => c !== 'email') }"
                                  class="accent-indigo-600 w-4 h-4" />
                           <span class="text-[10px] font-bold uppercase tracking-widest"
-                                :class="form.notification_settings.channels.includes('email') ? 'text-indigo-700 dark:text-indigo-400' : 'text-gray-500 dark:text-zinc-400'">Email Delivery</span>
+                                :class="form.notificationSettings.channels.includes('email') ? 'text-indigo-700 dark:text-indigo-400' : 'text-gray-500 dark:text-zinc-400'">Email Delivery</span>
                         </label>
                         <button type="button" @click="activeTab = 'slack'"
                                 class="flex items-center gap-3 px-4 py-2.5 rounded-sm transition-all group shadow-sm border text-left"
@@ -688,21 +688,21 @@ const navItems = [
 ];
 
 const eventTypes = [
-  { key: 'task_created', label: 'Task Created', icon: '<path d="M12 4v16m8-8H4" />' },
-  { key: 'task_status_updated', label: 'Status Update', icon: '<path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />' },
-  { key: 'task_received_message', label: 'New Message', icon: '<path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />' },
+  { key: 'taskCreated', label: 'Task Created', icon: '<path d="M12 4v16m8-8H4" />' },
+  { key: 'taskStatusUpdated', label: 'Status Update', icon: '<path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />' },
+  { key: 'taskReceivedMessage', label: 'New Message', icon: '<path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />' },
 ];
 
 const form = ref({
   name: '',
   description: '',
   icon: '',
-  notification_settings: {
-    task_created: false,
-    task_status_updated: false,
-    task_received_message: false,
-    workspace_archived: false,
-    workspace_unarchived: false,
+  notificationSettings: {
+    taskCreated: false,
+    taskStatusUpdated: false,
+    taskReceivedMessage: false,
+    workspaceArchived: false,
+    workspaceUnarchived: false,
     channels: ['email']
   },
   autoAllowedTools: [],
@@ -727,13 +727,13 @@ async function load() {
       name: workspace.value.name || '',
       description: workspace.value.description || '',
       icon: workspace.value.icon || '',
-      notification_settings: {
-        task_created: workspace.value.notification_settings?.task_created || false,
-        task_status_updated: workspace.value.notification_settings?.task_status_updated || false,
-        task_received_message: workspace.value.notification_settings?.task_received_message || false,
-        workspace_archived: workspace.value.notification_settings?.workspace_archived || false,
-        workspace_unarchived: workspace.value.notification_settings?.workspace_unarchived || false,
-        channels: workspace.value.notification_settings?.channels || ['email']
+      notificationSettings: {
+        taskCreated: workspace.value.notificationSettings?.taskCreated || false,
+        taskStatusUpdated: workspace.value.notificationSettings?.taskStatusUpdated || false,
+        taskReceivedMessage: workspace.value.notificationSettings?.taskReceivedMessage || false,
+        workspaceArchived: workspace.value.notificationSettings?.workspaceArchived || false,
+        workspaceUnarchived: workspace.value.notificationSettings?.workspaceUnarchived || false,
+        channels: workspace.value.notificationSettings?.channels || ['email']
       },
       autoAllowedTools: workspace.value.autoAllowedTools || [],
       allowAllCommands: workspace.value.allowAllCommands || false,
