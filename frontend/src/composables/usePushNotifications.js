@@ -21,7 +21,7 @@ async function getOrCreateBrowserSubscription(publicKey) {
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') return null
   try {
-    const reg = await navigator.serviceWorker.ready
+    const reg = await getServiceWorkerRegistration()
     const existing = await reg.pushManager.getSubscription()
     if (existing) return existing
     return await reg.pushManager.subscribe({
@@ -33,10 +33,15 @@ async function getOrCreateBrowserSubscription(publicKey) {
   }
 }
 
+async function getServiceWorkerRegistration() {
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('sw timeout')), 3000))
+  return Promise.race([navigator.serviceWorker.ready, timeout])
+}
+
 async function getBrowserSubscription() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null
   try {
-    const reg = await navigator.serviceWorker.ready
+    const reg = await getServiceWorkerRegistration()
     return await reg.pushManager.getSubscription()
   } catch {
     return null
