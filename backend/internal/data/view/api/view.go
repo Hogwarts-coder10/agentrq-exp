@@ -6,11 +6,11 @@ type (
 	// Workspace views
 
 	Workspace struct {
-		ID          string `json:"id"`
-		CreatedAt   time.Time `json:"createdAt"`
-		UpdatedAt   time.Time `json:"updatedAt"`
-		Name        string    `json:"name"`
-		Description string    `json:"description"`
+		ID                   string                `json:"id"`
+		CreatedAt            time.Time             `json:"createdAt"`
+		UpdatedAt            time.Time             `json:"updatedAt"`
+		Name                 string                `json:"name"`
+		Description          string                `json:"description"`
 		ArchivedAt           *time.Time            `json:"archivedAt,omitempty"`
 		Icon                 string                `json:"icon,omitempty"`
 		NotificationSettings *NotificationSettings `json:"notificationSettings,omitempty"`
@@ -89,21 +89,21 @@ type (
 		CreatedAt time.Time `json:"createdAt"`
 		UpdatedAt time.Time `json:"updatedAt"`
 
-		WorkspaceID   string       `json:"workspaceId"`
-		CreatedBy     string       `json:"createdBy"`
-		Assignee      string       `json:"assignee"`
-		Status        string       `json:"status"`
-		Title       string       `json:"title"`
-		Body        string       `json:"body"`
-		Response    string       `json:"response,omitempty"`
-		ReplyText   string       `json:"replyText,omitempty"`
-		Attachments []Attachment `json:"attachments,omitempty"`
-		Metadata    any          `json:"metadata,omitempty"`
-		Messages    []Message    `json:"messages,omitempty"`
-		CronSchedule string      `json:"cronSchedule,omitempty"`
-		ParentID     string      `json:"parentId,omitempty"`
-		SortOrder    float64     `json:"sortOrder"`
-		AllowAllCommands bool    `json:"allowAllCommands"`
+		WorkspaceID      string       `json:"workspaceId"`
+		CreatedBy        string       `json:"createdBy"`
+		Assignee         string       `json:"assignee"`
+		Status           string       `json:"status"`
+		Title            string       `json:"title"`
+		Body             string       `json:"body"`
+		Response         string       `json:"response,omitempty"`
+		ReplyText        string       `json:"replyText,omitempty"`
+		Attachments      []Attachment `json:"attachments,omitempty"`
+		Metadata         any          `json:"metadata,omitempty"`
+		Messages         []Message    `json:"messages,omitempty"`
+		CronSchedule     string       `json:"cronSchedule,omitempty"`
+		ParentID         string       `json:"parentId,omitempty"`
+		SortOrder        float64      `json:"sortOrder"`
+		AllowAllCommands bool         `json:"allowAllCommands"`
 	}
 
 	CreateTaskRequest struct {
@@ -210,5 +210,29 @@ type (
 
 	UpdateScheduledTaskResponse struct {
 		Task Task `json:"task"`
+	}
+
+	// Push notification views
+
+	PushSubscribeRequest struct {
+		Endpoint string `json:"endpoint"`
+		Keys     struct {
+			P256dh string `json:"p256dh"`
+			Auth   string `json:"auth"`
+		} `json:"keys"`
+		WorkspaceID string   `json:"workspaceId"`
+		Types       []string `json:"types,omitempty"` // optional; empty = all types
+	}
+
+	PushUnsubscribeRequest struct {
+		Endpoint string `json:"endpoint"`
+	}
+
+	VAPIDPublicKeyResponse struct {
+		PublicKey string `json:"publicKey"`
+	}
+
+	PushSubscriptionStatusResponse struct {
+		Subscribed bool `json:"subscribed"`
 	}
 )

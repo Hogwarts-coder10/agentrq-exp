@@ -264,6 +264,7 @@ import { useThemeStore } from './stores/themeStore'
 import { useTooltipStore } from './stores/tooltipStore'
 import { useWorkspaceStore } from './stores/workspaceStore'
 import { useFormat } from './composables/useFormat'
+import { usePushNotifications } from './composables/usePushNotifications'
 import Toast from './components/Toast.vue'
 
 const { toKebabCase } = useFormat()
@@ -339,11 +340,14 @@ const hideTooltip = () => {
 }
 
 async function logout() {
+  await unsubscribePush()
   await fetch('/api/v1/auth/logout', { method: 'POST' })
   window.location.href = '/login'
 }
 
 const loadWorkspaces = () => workspaceStore.fetchWorkspaces()
+
+const { unsubscribe: unsubscribePush } = usePushNotifications()
 
 const loadUser = async () => {
   if (isLoginPage.value) return;

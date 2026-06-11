@@ -81,6 +81,12 @@ AGENTRQ_SLACK_CLIENT_SECRET=your-slack-client-secret
 AGENTRQ_SLACK_SIGNING_SECRET=your-slack-signing-secret
 AGENTRQ_SLACK_APP_ID=your-slack-app-id
 
+# ── Web Push Notifications / PWA (optional) ──────────────
+# Generate keys: npx web-push generate-vapid-keys
+AGENTRQ_WEBPUSH_VAPID_PUBLIC_KEY=
+AGENTRQ_WEBPUSH_VAPID_PRIVATE_KEY=
+AGENTRQ_WEBPUSH_SUBSCRIBER=mailto:hi@example.com
+
 # ── DDoS Protection ─────────────────────────────────────
 AGENTRQ_DDOS_ENABLED=true
 AGENTRQ_DDOS_MAX_REQ_PER_SEC=20
@@ -207,6 +213,53 @@ This is required for user authentication. Follow these steps:
 
 ---
 
+## Web Push Notifications (PWA)
+
+AgentRQ is a PWA and can send native push notifications to your device when agents create tasks, update task status, or reply. This is optional — the app works fully without it.
+
+### 1. Generate VAPID keys
+
+VAPID keys identify your server to push services (Google, Apple, Mozilla). Generate them once:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Output:
+```
+Public Key:
+BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U
+
+Private Key:
+UUxI4O8-FbRouAevSmBQ6co-ocp-k_2Wah5mfWFkQ58
+```
+
+Keep the **Private Key** secret — treat it like a password.
+
+### 2. Add to your `.env`
+
+```env
+AGENTRQ_WEBPUSH_VAPID_PUBLIC_KEY=<Public Key from above>
+AGENTRQ_WEBPUSH_VAPID_PRIVATE_KEY=<Private Key from above>
+# Contact URI sent to push services (mailto: or https:). Required by VAPID spec.
+AGENTRQ_WEBPUSH_SUBSCRIBER=mailto:hi@example.com
+```
+
+### 3. How it works
+
+Once configured, users visiting the site will be prompted to allow notifications. Each device subscribes per workspace — notifications only arrive for workspaces the user subscribed to on that device.
+
+**Notification types** users receive:
+| Event | Title format |
+|---|---|
+| Agent opens a new task | `New task: <title>` |
+| Agent changes task status | `Task COMPLETED: <title>` |
+| Agent sends a reply | `Reply on: <title>` (body = first 100 chars of reply) |
+
+> If `AGENTRQ_WEBPUSH_VAPID_PUBLIC_KEY` is not set, push notifications are silently disabled — no errors, no prompts.
+
+---
+
 ## Connecting Claude Code / MCP Clients
 
 After setup, sign into your AgentRQ instance, create a workspace, and copy the MCP token. Then configure `.mcp.json`:
@@ -322,6 +375,9 @@ docker logs --tail 100 agentrq
 | `AGENTRQ_SLACK_CLIENT_SECRET` | If Slack | — | Slack app Client Secret |
 | `AGENTRQ_SLACK_SIGNING_SECRET` | If Slack | — | Slack app Signing Secret |
 | `AGENTRQ_SLACK_APP_ID` | If Slack | — | Slack App ID |
+| `AGENTRQ_WEBPUSH_VAPID_PUBLIC_KEY` | No | — | VAPID public key for Web Push (enables push notifications when set) |
+| `AGENTRQ_WEBPUSH_VAPID_PRIVATE_KEY` | No | — | VAPID private key for Web Push (keep secret) |
+| `AGENTRQ_WEBPUSH_SUBSCRIBER` | No | `mailto:hi@example.com` | Contact URI sent to push services (required by VAPID spec) |
 | `AGENTRQ_DDOS_ENABLED` | No | `true` | Enable DDoS protection |
 | `AGENTRQ_DDOS_MAX_REQ_PER_SEC` | No | `20` | Max requests per second before blocking |
 | `AGENTRQ_DDOS_BLOCK_DURATION` | No | `5m` | How long to block offending IPs |

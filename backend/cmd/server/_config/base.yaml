@@ -50,6 +50,11 @@ slack:
   clientId: "${AGENTRQ_SLACK_CLIENT_ID:}"
   clientSecret: "${AGENTRQ_SLACK_CLIENT_SECRET:}"
 
+webPush:
+  vapidPublicKey: ${AGENTRQ_WEBPUSH_VAPID_PUBLIC_KEY:}
+  vapidPrivateKey: ${AGENTRQ_WEBPUSH_VAPID_PRIVATE_KEY:}
+  subscriber: ${AGENTRQ_WEBPUSH_SUBSCRIBER:mailto:hi@example.com}
+
 ddos:
   enabled: ${AGENTRQ_DDOS_ENABLED:true}
   maxRequestsPerSecond: ${AGENTRQ_DDOS_MAX_REQ_PER_SEC:20}

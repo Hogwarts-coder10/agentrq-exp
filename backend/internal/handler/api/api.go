@@ -13,6 +13,7 @@ import (
 
 	"github.com/agentrq/agentrq/backend/internal/controller/crud"
 	mcpctrl "github.com/agentrq/agentrq/backend/internal/controller/mcp"
+	pushctrl "github.com/agentrq/agentrq/backend/internal/controller/push"
 	slackctrl "github.com/agentrq/agentrq/backend/internal/controller/slack"
 	entity "github.com/agentrq/agentrq/backend/internal/data/entity/crud"
 	mapper "github.com/agentrq/agentrq/backend/internal/mapper/api"
@@ -39,6 +40,7 @@ type (
 		RootToken        string
 		Router           fiber.Router
 		SlackCtrl        slackctrl.Controller // optional; nil = Slack disabled
+		PushCtrl         pushctrl.Controller  // optional; nil = push disabled
 	}
 
 	Handler interface{}
@@ -58,6 +60,7 @@ type (
 		rootToken        string
 		router           fiber.Router
 		slackCtrl        slackctrl.Controller
+		pushCtrl         pushctrl.Controller
 	}
 )
 
@@ -87,6 +90,7 @@ func New(p Params) (Handler, error) {
 		rootToken:        p.RootToken,
 		router:           p.Router,
 		slackCtrl:        p.SlackCtrl,
+		pushCtrl:         p.PushCtrl,
 	}
 
 	h.registerPublicAuthRoutes()
@@ -101,6 +105,9 @@ func New(p Params) (Handler, error) {
 	}
 	if err := h.registerTaskRoutes(); err != nil {
 		return nil, err
+	}
+	if p.PushCtrl != nil {
+		h.registerPushRoutes(p.PushCtrl)
 	}
 
 	return h, nil

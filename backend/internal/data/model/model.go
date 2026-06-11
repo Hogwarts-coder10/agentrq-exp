@@ -9,12 +9,12 @@ import (
 type (
 	// Workspace hosts an agentrq workspace
 	Workspace struct {
-		ID          int64 `gorm:"primaryKey;autoIncrement:false"`
-		CreatedAt   time.Time
-		UpdatedAt   time.Time
-		UserID      int64 `gorm:"index:idx_workspaces_user_id"`
-		Name        string `gorm:"type:varchar(128)"`
-		Description string `gorm:"type:text"`
+		ID                   int64 `gorm:"primaryKey;autoIncrement:false"`
+		CreatedAt            time.Time
+		UpdatedAt            time.Time
+		UserID               int64  `gorm:"index:idx_workspaces_user_id"`
+		Name                 string `gorm:"type:varchar(128)"`
+		Description          string `gorm:"type:text"`
 		ArchivedAt           *time.Time
 		Icon                 string         `gorm:"type:text"`
 		NotificationSettings datatypes.JSON `gorm:"type:text"`
@@ -31,10 +31,10 @@ type (
 		CreatedAt time.Time
 		UpdatedAt time.Time
 
-		UserID      int64 `gorm:"index:idx_tasks_user_id"`
+		UserID      int64  `gorm:"index:idx_tasks_user_id"`
 		WorkspaceID int64  `gorm:"index:idx_tasks_workspace_id"`
-		CreatedBy   string `gorm:"type:varchar(16)"` // "human" | "agent"
-		Assignee    string `gorm:"type:varchar(16)"` // "human" | "agent"
+		CreatedBy   string `gorm:"type:varchar(16)"`    // "human" | "agent"
+		Assignee    string `gorm:"type:varchar(16)"`    // "human" | "agent"
 		Status      string `json:"status" gorm:"index"` // notstarted, ongoing, completed, rejected, cron, blocked
 		Title       string `gorm:"type:varchar(255)"`
 		Body        string `gorm:"type:text"`
@@ -43,10 +43,10 @@ type (
 		Attachments datatypes.JSON
 		Messages    []Message `gorm:"foreignKey:TaskID"`
 
-		CronSchedule string `gorm:"type:varchar(64)"`
-		ParentID     int64  `gorm:"index:idx_tasks_parent_id"`
-		SortOrder    float64 `gorm:"type:real;default:0"`
-		AllowAllCommands bool `gorm:"default:false"`
+		CronSchedule     string  `gorm:"type:varchar(64)"`
+		ParentID         int64   `gorm:"index:idx_tasks_parent_id"`
+		SortOrder        float64 `gorm:"type:real;default:0"`
+		AllowAllCommands bool    `gorm:"default:false"`
 	}
 
 	// Message is an entry in a task's chat history
@@ -64,21 +64,21 @@ type (
 
 	// Telemetry record for user and workspace actions
 	Telemetry struct {
-		UserID      int64  `gorm:"index:idx_telemetry_user_id"`
-		WorkspaceID int64  `gorm:"index:idx_telemetry_workspace_id"`
-		OccurredAt  int64  `gorm:"index:idx_telemetry_occurred_at"`
-		Action      uint8  `gorm:"index:idx_telemetry_action"`
-		Actor       uint8  `gorm:"index:idx_telemetry_actor"`
+		UserID      int64 `gorm:"index:idx_telemetry_user_id"`
+		WorkspaceID int64 `gorm:"index:idx_telemetry_workspace_id"`
+		OccurredAt  int64 `gorm:"index:idx_telemetry_occurred_at"`
+		Action      uint8 `gorm:"index:idx_telemetry_action"`
+		Actor       uint8 `gorm:"index:idx_telemetry_actor"`
 	}
 
 	// User represents a human user
 	User struct {
-		ID         int64 `gorm:"primaryKey;autoIncrement:false"`
-		CreatedAt  time.Time
-		UpdatedAt  time.Time
-		Email      string `gorm:"type:varchar(255);uniqueIndex"`
-		Name       string `gorm:"type:varchar(255)"`
-		Picture    string `gorm:"type:text"`
+		ID        int64 `gorm:"primaryKey;autoIncrement:false"`
+		CreatedAt time.Time
+		UpdatedAt time.Time
+		Email     string `gorm:"type:varchar(255);uniqueIndex"`
+		Name      string `gorm:"type:varchar(255)"`
+		Picture   string `gorm:"type:text"`
 	}
 
 	// SlackWorkspaceLink stores the Slack channel assigned to a workspace.
@@ -92,6 +92,19 @@ type (
 		TeamID           string `gorm:"type:varchar(32)"`
 		BotUserID        string `gorm:"type:varchar(32)"`
 		AutoCreated      bool   `gorm:"default:false"` // true if created automatically on workspace creation
+	}
+
+	// PushSubscription stores a Web Push subscription for a user per workspace.
+	PushSubscription struct {
+		ID          int64 `gorm:"primaryKey;autoIncrement:false"`
+		CreatedAt   time.Time
+		UserID      int64  `gorm:"index:idx_push_subscriptions_user_id"`
+		WorkspaceID int64  `gorm:"index:idx_push_subscriptions_workspace_id;uniqueIndex:idx_push_endpoint_workspace"`
+		Endpoint    string `gorm:"type:text;uniqueIndex:idx_push_endpoint_workspace"`
+		P256dh      string `gorm:"type:text"`
+		Auth        string `gorm:"type:varchar(64)"`
+		UserAgent   string `gorm:"type:varchar(255)"`
+		Types       string `gorm:"type:text"` // comma-separated; empty = all types
 	}
 
 	// SlackTaskThread maps an AgentRQ task to a Slack thread timestamp (ts).

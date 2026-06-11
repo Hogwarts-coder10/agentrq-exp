@@ -390,6 +390,35 @@ type (
 		Actor        Actor        `json:"actor"`  // 1: Human, 2: Agent
 		Origin       Origin       `json:"origin"` // 1: API, 2: MCP, 3: Scheduler, 4: Slack
 	}
+
+	// Push subscription entities
+
+	SavePushSubscriptionRequest struct {
+		UserID      int64
+		WorkspaceID int64
+		Endpoint    string
+		P256dh      string
+		Auth        string
+		UserAgent   string
+		Types       []string // empty = all types
+	}
+
+	DeletePushSubscriptionRequest struct {
+		UserID   int64
+		Endpoint string
+	}
+
+	CheckPushSubscriptionRequest struct {
+		UserID      int64
+		WorkspaceID int64
+		Endpoint    string
+	}
+
+	DeletePushSubscriptionByWorkspaceRequest struct {
+		UserID      int64
+		WorkspaceID int64
+		Endpoint    string
+	}
 )
 
 const (
@@ -468,7 +497,6 @@ func GetOrigin(ctx context.Context) Origin {
 	}
 	return OriginInvalid
 }
-
 
 const (
 	ActionUserCreate Action = iota + 1

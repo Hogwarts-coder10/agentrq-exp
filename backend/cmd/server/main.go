@@ -29,6 +29,9 @@ func main() {
 	if err := cfgSvc.Populate("slack", &cfg.Slack); err != nil {
 		zlog.Fatal().Err(err).Msg("config slack")
 	}
+	if err := cfgSvc.Populate("webPush", &cfg.WebPush); err != nil {
+		zlog.Fatal().Err(err).Msg("config webPush")
+	}
 
 	cfg.ConfigSvc = cfgSvc
 

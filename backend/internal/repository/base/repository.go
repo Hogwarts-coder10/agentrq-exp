@@ -61,6 +61,13 @@ type Repository interface {
 	UpsertSlackTaskThread(ctx context.Context, thread model.SlackTaskThread) error
 	GetSlackTaskThreadByTask(ctx context.Context, taskID int64) (model.SlackTaskThread, error)
 	GetSlackTaskThreadByChannel(ctx context.Context, channelID, threadTS string) (model.SlackTaskThread, error)
+
+	// Push subscriptions
+	SavePushSubscription(ctx context.Context, sub model.PushSubscription) error
+	DeletePushSubscription(ctx context.Context, userID int64, endpoint string) error
+	DeletePushSubscriptionByWorkspace(ctx context.Context, userID int64, workspaceID int64, endpoint string) error
+	GetPushSubscriptionForWorkspace(ctx context.Context, userID int64, workspaceID int64, endpoint string) (bool, error)
+	ListPushSubscriptionsByUserAndWorkspace(ctx context.Context, userID int64, workspaceID int64) ([]model.PushSubscription, error)
 }
 
 type repository struct {
@@ -724,4 +731,39 @@ func (r *repository) GetWorkspaceTaskCountsByCategory(ctx context.Context, works
 	counts["pending"] = pending
 
 	return counts, nil
+}
+
+// ── Push Subscriptions ──────────────────────────────────────────────────────────
+
+func (r *repository) SavePushSubscription(ctx context.Context, sub model.PushSubscription) error {
+	return r.conn(ctx).
+		Where(model.PushSubscription{Endpoint: sub.Endpoint, WorkspaceID: sub.WorkspaceID}).
+		Assign(sub).
+		FirstOrCreate(&sub).Error
+}
+
+func (r *repository) DeletePushSubscription(ctx context.Context, userID int64, endpoint string) error {
+	return r.conn(ctx).
+		Where("user_id = ? AND endpoint = ?", userID, endpoint).
+		Delete(&model.PushSubscription{}).Error
+}
+
+func (r *repository) DeletePushSubscriptionByWorkspace(ctx context.Context, userID int64, workspaceID int64, endpoint string) error {
+	return r.conn(ctx).
+		Where("user_id = ? AND workspace_id = ? AND endpoint = ?", userID, workspaceID, endpoint).
+		Delete(&model.PushSubscription{}).Error
+}
+
+func (r *repository) GetPushSubscriptionForWorkspace(ctx context.Context, userID int64, workspaceID int64, endpoint string) (bool, error) {
+	var count int64
+	err := r.conn(ctx).Model(&model.PushSubscription{}).
+		Where("user_id = ? AND workspace_id = ? AND endpoint = ?", userID, workspaceID, endpoint).
+		Count(&count).Error
+	return count > 0, err
+}
+
+func (r *repository) ListPushSubscriptionsByUserAndWorkspace(ctx context.Context, userID int64, workspaceID int64) ([]model.PushSubscription, error) {
+	var subs []model.PushSubscription
+	err := r.conn(ctx).Where("user_id = ? AND workspace_id = ?", userID, workspaceID).Find(&subs).Error
+	return subs, err
 }
