@@ -301,6 +301,7 @@ const appVersion = __APP_VERSION__
 const { needRefresh, updateServiceWorker } = useRegisterSW()
 
 const handleUpdateNow = async () => {
+  needRefresh.value = false
   await updateServiceWorker(false)
   window.location.reload()
 }
