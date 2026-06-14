@@ -660,7 +660,7 @@ func (c *controller) GetAttachment(ctx context.Context, req entity.GetAttachment
 	}
 
 	// 3. Query attachment metadata directly from DB
-	filename, mimeType, err := c.repository.FindAttachmentMetadata(ctx, req.WorkspaceID, req.AttachmentID)
+	filename, mimeType, err := c.repository.FindAttachmentMetadata(ctx, req.WorkspaceID, req.TaskID, req.AttachmentID)
 	if err != nil {
 		return nil, base.ErrNotFound
 	}

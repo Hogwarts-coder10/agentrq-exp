@@ -30,7 +30,7 @@ const (
 	_routePathAllowAll   = "/workspaces/:id/tasks/:taskID/allow_all"
 	_routePathPermission = "/workspaces/:id/tasks/:taskID/permission"
 	_routePathEvents     = "/workspaces/:id/events"
-	_routePathAttachment = "/workspaces/:id/attachments/:attachmentID"
+	_routePathAttachment = "/workspaces/:id/tasks/:taskID/attachments/:attachmentID"
 	_routePathCounts     = "/workspaces/:id/tasks/counts"
 )
 
@@ -476,8 +476,9 @@ func (h *handler) sseEvents() fiber.Handler {
 func (h *handler) getAttachment() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		workspaceID := monoflake.IDFromBase62(c.Params("id")).Int64()
+		taskID := monoflake.IDFromBase62(c.Params("taskID")).Int64()
 		attachmentID := c.Params("attachmentID")
-		if workspaceID == 0 || attachmentID == "" {
+		if workspaceID == 0 || taskID == 0 || attachmentID == "" {
 			return c.Status(http.StatusUnprocessableEntity).Send(_invalidPayload)
 		}
 
@@ -487,6 +488,7 @@ func (h *handler) getAttachment() fiber.Handler {
 
 		res, err := h.crud.GetAttachment(ctx, entity.GetAttachmentRequest{
 			WorkspaceID:  workspaceID,
+			TaskID:       taskID,
 			AttachmentID: attachmentID,
 			UserID:       userID,
 		})

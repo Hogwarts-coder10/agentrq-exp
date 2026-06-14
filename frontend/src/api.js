@@ -171,8 +171,8 @@ export async function archiveWorkspace(id) {
   return true;
 }
 
-export function getAttachmentUrl(workspaceId, attachmentId) {
-  return `${API_BASE_URL}/workspaces/${workspaceId}/attachments/${attachmentId}`;
+export function getAttachmentUrl(workspaceId, taskId, attachmentId) {
+  return `${API_BASE_URL}/workspaces/${workspaceId}/tasks/${taskId}/attachments/${attachmentId}`;
 }
 
 export async function getWorkspaceToken(id) {

@@ -105,7 +105,7 @@
                  @click="previewAttachment(att)"
                  class="flex items-center gap-3 px-4 py-2 rounded-xl border border-gray-100 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/50 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all cursor-pointer group shadow-sm">
               <div class="w-6 h-6 flex items-center justify-center overflow-hidden rounded-lg">
-                <img v-if="att.mimeType && att.mimeType.startsWith('image/')" :src="getAttachmentUrl(workspaceId, att.id)" class="w-full h-full object-cover" />
+                <img v-if="att.mimeType && att.mimeType.startsWith('image/')" :src="getAttachmentUrl(workspaceId, taskId, att.id)" class="w-full h-full object-cover" />
                 <svg v-else class="w-4 h-4 text-gray-500 group-hover:text-black dark:group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
               </div>
               <span class="text-[10px] font-bold text-gray-500 dark:text-zinc-400 group-hover:text-black dark:group-hover:text-white transition-colors uppercase tracking-widest">{{ att.filename }}</span>
@@ -358,15 +358,15 @@
       </button>
       <div class="relative max-w-[90vw] max-h-[85vh] flex flex-col items-center gap-4 z-10">
         <div class="rounded-sm overflow-hidden flex items-center justify-center min-w-[300px] bg-black shadow-2xl border border-white/10">
-          <img v-if="selectedAtt.mimeType?.startsWith('image/')" :src="getAttachmentUrl(workspaceId, selectedAtt.id)" class="max-w-full max-h-[70vh] object-scale-down" />
-          <video v-else-if="selectedAtt.mimeType?.startsWith('video/')" controls autoplay :src="getAttachmentUrl(workspaceId, selectedAtt.id)" class="max-w-full max-h-[70vh]" />
+          <img v-if="selectedAtt.mimeType?.startsWith('image/')" :src="getAttachmentUrl(workspaceId, taskId, selectedAtt.id)" class="max-w-full max-h-[70vh] object-scale-down" />
+          <video v-else-if="selectedAtt.mimeType?.startsWith('video/')" controls autoplay :src="getAttachmentUrl(workspaceId, taskId, selectedAtt.id)" class="max-w-full max-h-[70vh]" />
           <div v-else-if="selectedAtt.mimeType?.startsWith('audio/')" class="p-16 flex flex-col items-center gap-6">
             <div class="w-20 h-20 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center shadow-lg">
               <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             </div>
-            <audio controls autoplay :src="getAttachmentUrl(workspaceId, selectedAtt.id)" class="w-[400px]" />
+            <audio controls autoplay :src="getAttachmentUrl(workspaceId, taskId, selectedAtt.id)" class="w-[400px]" />
           </div>
-          <iframe v-else-if="selectedAtt.mimeType?.includes('pdf')" :src="getAttachmentUrl(workspaceId, selectedAtt.id)" class="w-[80vw] h-[75vh]" frameborder="0"></iframe>
+          <iframe v-else-if="selectedAtt.mimeType?.includes('pdf')" :src="getAttachmentUrl(workspaceId, taskId, selectedAtt.id)" class="w-[80vw] h-[75vh]" frameborder="0"></iframe>
           <div v-else class="p-20 flex flex-col items-center gap-4">
             <svg class="w-24 h-24 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
             <p class="text-white font-bold text-sm">{{ selectedAtt.filename }}</p>
@@ -378,7 +378,7 @@
             <p class="text-[9px] font-semibold text-zinc-400">{{ selectedAtt.mimeType }}</p>
           </div>
           <div class="w-px h-8 bg-zinc-700"></div>
-          <a :href="getAttachmentUrl(workspaceId, selectedAtt.id)" :download="selectedAtt.filename"
+          <a :href="getAttachmentUrl(workspaceId, taskId, selectedAtt.id)" :download="selectedAtt.filename"
              class="flex items-center gap-2 px-4 py-2 rounded-sm bg-white text-black text-[10px] font-semibold hover:bg-gray-100 transition-all">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
             Download

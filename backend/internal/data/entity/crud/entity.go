@@ -294,6 +294,7 @@ type (
 
 	GetAttachmentRequest struct {
 		WorkspaceID  int64
+		TaskID       int64
 		AttachmentID string
 		UserID       string
 	}
