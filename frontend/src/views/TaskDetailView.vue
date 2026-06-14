@@ -256,18 +256,18 @@
              <svg class="w-4 h-4 text-gray-600 dark:text-zinc-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
           </div>
           <div class="flex flex-col items-end min-w-0">
-             <div class="bg-gray-900 text-white dark:bg-zinc-800 dark:text-zinc-100 border border-transparent dark:border-zinc-700 rounded-sm p-3.5 shadow-sm min-w-0">
+             <div class="bg-gray-200 text-gray-900 dark:bg-zinc-800 dark:text-zinc-100 border border-gray-300 dark:border-zinc-700 rounded-sm p-3.5 shadow-sm min-w-0">
                <span class="text-[9px] font-semibold text-gray-500 dark:text-zinc-400 block mb-1.5 text-right">
                  You · {{ formatDateTime(m.createdAt) }}
                </span>
                <div class="text-[13px] font-medium leading-relaxed whitespace-pre-wrap text-right break-all">{{ m.text }}</div>
                <!-- Attachments on human message -->
-               <div v-if="m.attachments && m.attachments.length > 0" class="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-700 dark:border-zinc-600 justify-end">
+               <div v-if="m.attachments && m.attachments.length > 0" class="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-300 dark:border-zinc-600 justify-end">
                  <div v-for="(att, i) in m.attachments" :key="i"
                       @click="previewAttachment(att)"
-                      class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm border border-gray-700 dark:border-zinc-600 bg-gray-800 dark:bg-zinc-700 hover:bg-gray-700 dark:hover:bg-zinc-600 transition-colors cursor-pointer text-[9px] font-semibold">
-                   <svg class="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
-                   <span class="truncate max-w-[140px] text-gray-200">{{ att.filename }}</span>
+                      class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm border border-gray-300 dark:border-zinc-600 bg-gray-100 dark:bg-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-600 transition-colors cursor-pointer text-[9px] font-semibold">
+                   <svg class="w-3 h-3 text-gray-500 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                   <span class="truncate max-w-[140px] text-gray-700 dark:text-gray-200">{{ att.filename }}</span>
                  </div>
                </div>
              </div>
