@@ -657,7 +657,7 @@ func TestGetAttachment_Success(t *testing.T) {
 
 	e.repo.EXPECT().CheckWorkspaceAccess(gomock.Any(), int64(1), testUserID).Return(true, nil)
 	e.storage.EXPECT().LoadRaw("att-1").Return([]byte("content"), nil)
-	e.repo.EXPECT().FindAttachmentMetadata(gomock.Any(), int64(1), int64(10), "att-1").Return("f.txt", "text/plain", nil)
+	e.repo.EXPECT().FindAttachmentMetadata(gomock.Any(), int64(1), testUserID, int64(10), "att-1").Return("f.txt", "text/plain", nil)
 
 	resp, err := e.controller.GetAttachment(context.Background(), entity.GetAttachmentRequest{
 		WorkspaceID:  1,
@@ -714,7 +714,7 @@ func TestGetAttachment_MetadataNotFound(t *testing.T) {
 
 	e.repo.EXPECT().CheckWorkspaceAccess(gomock.Any(), int64(1), testUserID).Return(true, nil)
 	e.storage.EXPECT().LoadRaw("att-1").Return([]byte("data"), nil)
-	e.repo.EXPECT().FindAttachmentMetadata(gomock.Any(), int64(1), int64(10), "att-1").Return("", "", fmt.Errorf("attachment metadata not found"))
+	e.repo.EXPECT().FindAttachmentMetadata(gomock.Any(), int64(1), testUserID, int64(10), "att-1").Return("", "", fmt.Errorf("attachment metadata not found"))
 
 	_, err := e.controller.GetAttachment(context.Background(), entity.GetAttachmentRequest{
 		WorkspaceID:  1,

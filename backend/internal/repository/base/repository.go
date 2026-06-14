@@ -34,7 +34,7 @@ type Repository interface {
 	CreateMessage(ctx context.Context, m model.Message) error
 	ListMessages(ctx context.Context, taskID int64) ([]model.Message, error)
 	UpdateMessageMetadata(ctx context.Context, taskID int64, messageID int64, metadata []byte) error
-	FindAttachmentMetadata(ctx context.Context, workspaceID int64, taskID int64, attachmentID string) (filename string, mimeType string, err error)
+	FindAttachmentMetadata(ctx context.Context, workspaceID int64, userID int64, taskID int64, attachmentID string) (filename string, mimeType string, err error)
 	GetWorkspaceAttachmentIDs(ctx context.Context, workspaceID int64) ([]string, error)
 
 	SystemGetWorkspace(ctx context.Context, id int64) (model.Workspace, error)
@@ -343,7 +343,13 @@ func (r *repository) UpdateMessageMetadata(ctx context.Context, taskID int64, me
 	return r.conn(ctx).Model(&model.Message{}).Where("id = ? AND task_id = ?", messageID, taskID).Update("metadata", metadata).Error
 }
 
-func (r *repository) FindAttachmentMetadata(ctx context.Context, workspaceID int64, taskID int64, attachmentID string) (string, string, error) {
+func (r *repository) FindAttachmentMetadata(ctx context.Context, workspaceID int64, userID int64, taskID int64, attachmentID string) (string, string, error) {
+	// Verify the user owns the workspace before any attachment lookup
+	var wsCount int64
+	if err := r.conn(ctx).Model(&model.Workspace{}).Where("id = ? AND user_id = ?", workspaceID, userID).Count(&wsCount).Error; err != nil || wsCount == 0 {
+		return "", "", fmt.Errorf("attachment metadata not found")
+	}
+
 	likeExpr := "%" + attachmentID + "%"
 
 	// Check task-level attachments first (task created with attachments)
