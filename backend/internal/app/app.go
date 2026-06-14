@@ -609,6 +609,7 @@ func New(cfg Config) (*App, error) {
 	// ── Fiber & Routing ────────────────────────────────────────────────────────
 	fiberApp := fiber.New(fiber.Config{
 		DisableStartupMessage: false,
+		BodyLimit:             50 * 1024 * 1024, // 50 MB to support large base64-encoded attachments
 	})
 	fiberApp.Use(cors.New(cors.Config{
 		AllowOrigins:  "*",
