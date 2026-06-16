@@ -1,7 +1,7 @@
 <template>
   <div class="h-full flex flex-col gap-4 w-full">
     <!-- Page Header -->
-    <div class="py-2 mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 px-4">
+    <div class="py-2 mb-2 flex flex-col md:flex-row md:items-end justify-between gap-4 px-4">
       <div class="flex-1">
         <div class="flex items-center justify-between md:justify-start gap-4 mb-2">
           <div class="flex items-center gap-3">
