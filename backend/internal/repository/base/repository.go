@@ -34,7 +34,6 @@ type Repository interface {
 	CreateMessage(ctx context.Context, m model.Message) error
 	ListMessages(ctx context.Context, taskID int64) ([]model.Message, error)
 	UpdateMessageMetadata(ctx context.Context, taskID int64, messageID int64, metadata []byte) error
-	FindAttachmentMetadata(ctx context.Context, workspaceID int64, userID int64, taskID int64, attachmentID string) (filename string, mimeType string, err error)
 	GetWorkspaceAttachmentIDs(ctx context.Context, workspaceID int64) ([]string, error)
 
 	SystemGetWorkspace(ctx context.Context, id int64) (model.Workspace, error)
@@ -341,50 +340,6 @@ func (r *repository) ListMessages(ctx context.Context, taskID int64) ([]model.Me
 
 func (r *repository) UpdateMessageMetadata(ctx context.Context, taskID int64, messageID int64, metadata []byte) error {
 	return r.conn(ctx).Model(&model.Message{}).Where("id = ? AND task_id = ?", messageID, taskID).Update("metadata", metadata).Error
-}
-
-func (r *repository) FindAttachmentMetadata(ctx context.Context, workspaceID int64, userID int64, taskID int64, attachmentID string) (string, string, error) {
-	// Verify the user owns the workspace before any attachment lookup
-	var wsCount int64
-	if err := r.conn(ctx).Model(&model.Workspace{}).Where("id = ? AND user_id = ?", workspaceID, userID).Count(&wsCount).Error; err != nil || wsCount == 0 {
-		return "", "", fmt.Errorf("attachment metadata not found")
-	}
-
-	likeExpr := "%" + attachmentID + "%"
-
-	// Check task-level attachments first (task created with attachments)
-	var task model.Task
-	err := r.conn(ctx).Where("id = ? AND workspace_id = ? AND attachments LIKE ?", taskID, workspaceID, likeExpr).First(&task).Error
-	if err == nil && len(task.Attachments) > 0 {
-		var atts []entity.Attachment
-		if err := json.Unmarshal(task.Attachments, &atts); err == nil {
-			for _, a := range atts {
-				if a.ID == attachmentID {
-					return a.Filename, a.MimeType, nil
-				}
-			}
-		}
-	}
-
-	// Check message-level attachments for this task (workspace scope via subquery)
-	var msgs []model.Message
-	err = r.conn(ctx).Where("task_id IN (SELECT id FROM tasks WHERE id = ? AND workspace_id = ?) AND attachments LIKE ?", taskID, workspaceID, likeExpr).Find(&msgs).Error
-	if err == nil {
-		for _, m := range msgs {
-			var atts []entity.Attachment
-			if len(m.Attachments) > 0 {
-				if err := json.Unmarshal(m.Attachments, &atts); err == nil {
-					for _, a := range atts {
-						if a.ID == attachmentID {
-							return a.Filename, a.MimeType, nil
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return "", "", fmt.Errorf("attachment metadata not found")
 }
 
 func (r *repository) GetWorkspaceAttachmentIDs(ctx context.Context, workspaceID int64) ([]string, error) {

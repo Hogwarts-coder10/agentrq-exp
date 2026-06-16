@@ -647,29 +647,48 @@ func (c *controller) fromModelTaskToEntity(m model.Task) entity.Task {
 func (c *controller) GetAttachment(ctx context.Context, req entity.GetAttachmentRequest) (*entity.GetAttachmentResponse, error) {
 	uid := monoflake.IDFromBase62(req.UserID).Int64()
 
-	// 1. Verify workspace access
-	ok, err := c.repository.CheckWorkspaceAccess(ctx, req.WorkspaceID, uid)
-	if err != nil || !ok {
-		return nil, base.ErrNotFound
-	}
-
-	// 2. Load attachment file data from disk
-	data, err := c.storage.LoadRaw(req.AttachmentID)
+	// Load task with messages — also verifies the user owns the task (GetTask filters by user_id).
+	t, err := c.repository.GetTask(ctx, req.WorkspaceID, req.TaskID, uid)
 	if err != nil {
 		return nil, base.ErrNotFound
 	}
 
-	// 3. Query attachment metadata directly from DB
-	filename, mimeType, err := c.repository.FindAttachmentMetadata(ctx, req.WorkspaceID, uid, req.TaskID, req.AttachmentID)
-	if err != nil {
-		return nil, base.ErrNotFound
+	// Search task-level attachments.
+	if len(t.Attachments) > 0 {
+		var atts []entity.Attachment
+		if err := json.Unmarshal(t.Attachments, &atts); err == nil {
+			for _, a := range atts {
+				if a.ID == req.AttachmentID {
+					data, err := c.storage.LoadRaw(a.ID)
+					if err != nil {
+						return nil, base.ErrNotFound
+					}
+					return &entity.GetAttachmentResponse{Data: data, Filename: a.Filename, MimeType: a.MimeType}, nil
+				}
+			}
+		}
 	}
 
-	return &entity.GetAttachmentResponse{
-		Data:     data,
-		Filename: filename,
-		MimeType: mimeType,
-	}, nil
+	// Search message-level attachments.
+	for _, m := range t.Messages {
+		if len(m.Attachments) == 0 {
+			continue
+		}
+		var atts []entity.Attachment
+		if err := json.Unmarshal(m.Attachments, &atts); err == nil {
+			for _, a := range atts {
+				if a.ID == req.AttachmentID {
+					data, err := c.storage.LoadRaw(a.ID)
+					if err != nil {
+						return nil, base.ErrNotFound
+					}
+					return &entity.GetAttachmentResponse{Data: data, Filename: a.Filename, MimeType: a.MimeType}, nil
+				}
+			}
+		}
+	}
+
+	return nil, base.ErrNotFound
 }
 
 func (c *controller) saveAttachments(atts []entity.Attachment) {

@@ -2,6 +2,7 @@ package crud
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -9,7 +10,9 @@ import (
 
 	entity "github.com/agentrq/agentrq/backend/internal/data/entity/crud"
 	"github.com/agentrq/agentrq/backend/internal/data/model"
+	"github.com/agentrq/agentrq/backend/internal/repository/base"
 	"github.com/golang/mock/gomock"
+	"gorm.io/datatypes"
 )
 
 // ── CreateTask ────────────────────────────────────────────────────────────────
@@ -656,9 +659,11 @@ func TestDeleteTask_Success(t *testing.T) {
 func TestGetAttachment_Success(t *testing.T) {
 	e := newTestController(t)
 
-	e.repo.EXPECT().CheckWorkspaceAccess(gomock.Any(), int64(1), testUserID).Return(true, nil)
+	attsJSON, _ := json.Marshal([]entity.Attachment{{ID: "att-1", Filename: "f.txt", MimeType: "text/plain"}})
+	task := model.Task{ID: 10, WorkspaceID: 1, Attachments: datatypes.JSON(attsJSON)}
+
+	e.repo.EXPECT().GetTask(gomock.Any(), int64(1), int64(10), testUserID).Return(task, nil)
 	e.storage.EXPECT().LoadRaw("att-1").Return([]byte("content"), nil)
-	e.repo.EXPECT().FindAttachmentMetadata(gomock.Any(), int64(1), testUserID, int64(10), "att-1").Return("f.txt", "text/plain", nil)
 
 	resp, err := e.controller.GetAttachment(context.Background(), entity.GetAttachmentRequest{
 		WorkspaceID:  1,
@@ -677,10 +682,37 @@ func TestGetAttachment_Success(t *testing.T) {
 	}
 }
 
-func TestGetAttachment_AccessDenied(t *testing.T) {
+func TestGetAttachment_SuccessMessageAttachment(t *testing.T) {
 	e := newTestController(t)
 
-	e.repo.EXPECT().CheckWorkspaceAccess(gomock.Any(), int64(1), testUserID).Return(false, nil)
+	msgAttsJSON, _ := json.Marshal([]entity.Attachment{{ID: "att-msg", Filename: "photo.png", MimeType: "image/png"}})
+	task := model.Task{
+		ID:          10,
+		WorkspaceID: 1,
+		Messages:    []model.Message{{ID: 99, TaskID: 10, Attachments: datatypes.JSON(msgAttsJSON)}},
+	}
+
+	e.repo.EXPECT().GetTask(gomock.Any(), int64(1), int64(10), testUserID).Return(task, nil)
+	e.storage.EXPECT().LoadRaw("att-msg").Return([]byte("imgdata"), nil)
+
+	resp, err := e.controller.GetAttachment(context.Background(), entity.GetAttachmentRequest{
+		WorkspaceID:  1,
+		TaskID:       10,
+		AttachmentID: "att-msg",
+		UserID:       testUserIDStr,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Filename != "photo.png" || resp.MimeType != "image/png" {
+		t.Errorf("unexpected metadata: %s %s", resp.Filename, resp.MimeType)
+	}
+}
+
+func TestGetAttachment_TaskNotFound(t *testing.T) {
+	e := newTestController(t)
+
+	e.repo.EXPECT().GetTask(gomock.Any(), int64(1), int64(10), testUserID).Return(model.Task{}, base.ErrNotFound)
 
 	_, err := e.controller.GetAttachment(context.Background(), entity.GetAttachmentRequest{
 		WorkspaceID:  1,
@@ -689,15 +721,14 @@ func TestGetAttachment_AccessDenied(t *testing.T) {
 		UserID:       testUserIDStr,
 	})
 	if err == nil {
-		t.Fatal("expected error for access denied")
+		t.Fatal("expected error for task not found / access denied")
 	}
 }
 
-func TestGetAttachment_FileNotFound(t *testing.T) {
+func TestGetAttachment_AttachmentNotFound(t *testing.T) {
 	e := newTestController(t)
 
-	e.repo.EXPECT().CheckWorkspaceAccess(gomock.Any(), int64(1), testUserID).Return(true, nil)
-	e.storage.EXPECT().LoadRaw("att-missing").Return(nil, fmt.Errorf("no such file"))
+	e.repo.EXPECT().GetTask(gomock.Any(), int64(1), int64(10), testUserID).Return(model.Task{ID: 10, WorkspaceID: 1}, nil)
 
 	_, err := e.controller.GetAttachment(context.Background(), entity.GetAttachmentRequest{
 		WorkspaceID:  1,
@@ -706,16 +737,18 @@ func TestGetAttachment_FileNotFound(t *testing.T) {
 		UserID:       testUserIDStr,
 	})
 	if err == nil {
-		t.Fatal("expected error for missing file")
+		t.Fatal("expected error for attachment not in task")
 	}
 }
 
-func TestGetAttachment_MetadataNotFound(t *testing.T) {
+func TestGetAttachment_FileNotFound(t *testing.T) {
 	e := newTestController(t)
 
-	e.repo.EXPECT().CheckWorkspaceAccess(gomock.Any(), int64(1), testUserID).Return(true, nil)
-	e.storage.EXPECT().LoadRaw("att-1").Return([]byte("data"), nil)
-	e.repo.EXPECT().FindAttachmentMetadata(gomock.Any(), int64(1), testUserID, int64(10), "att-1").Return("", "", fmt.Errorf("attachment metadata not found"))
+	attsJSON, _ := json.Marshal([]entity.Attachment{{ID: "att-1", Filename: "f.txt", MimeType: "text/plain"}})
+	task := model.Task{ID: 10, WorkspaceID: 1, Attachments: datatypes.JSON(attsJSON)}
+
+	e.repo.EXPECT().GetTask(gomock.Any(), int64(1), int64(10), testUserID).Return(task, nil)
+	e.storage.EXPECT().LoadRaw("att-1").Return(nil, fmt.Errorf("no such file"))
 
 	_, err := e.controller.GetAttachment(context.Background(), entity.GetAttachmentRequest{
 		WorkspaceID:  1,
@@ -724,7 +757,7 @@ func TestGetAttachment_MetadataNotFound(t *testing.T) {
 		UserID:       testUserIDStr,
 	})
 	if err == nil {
-		t.Fatal("expected error for missing metadata")
+		t.Fatal("expected error for missing file")
 	}
 }
 
