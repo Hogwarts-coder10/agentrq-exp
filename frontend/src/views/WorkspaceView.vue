@@ -1,16 +1,14 @@
 <template>
-  <div class="h-full flex flex-col gap-4 w-full">
+  <div class="h-full flex flex-col gap-1 w-full">
     <!-- Page Header -->
-    <div class="py-2 mb-2 flex flex-col md:flex-row md:items-end justify-between gap-4 px-4">
+    <div class="py-2 flex flex-col md:flex-row md:items-end justify-between gap-4 px-4">
       <div class="flex-1">
-        <div class="flex items-center justify-between md:justify-start gap-4 mb-2">
+        <div class="flex items-center justify-between md:justify-start gap-4">
           <div class="flex items-center gap-3">
             <h1 class="text-xl md:text-2xl font-black text-gray-800 dark:text-zinc-200">Workspaces</h1>
           </div>
-
         </div>
-</div>
-
+      </div>
     </div>
 
     <!-- Create workspace form -->
