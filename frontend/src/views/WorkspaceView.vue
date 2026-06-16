@@ -1,18 +1,14 @@
 <template>
-  <div class="h-full flex flex-col gap-4 w-full">
+  <div class="h-full flex flex-col w-full">
     <!-- Page Header -->
     <div class="py-2 mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 px-4">
       <div class="flex-1">
-        <div class="flex items-center justify-between md:justify-start gap-4 mb-2">
+        <div class="flex items-center justify-between md:justify-start gap-4">
           <div class="flex items-center gap-3">
             <h1 class="text-xl md:text-2xl font-black text-gray-800 dark:text-zinc-200">Workspaces</h1>
           </div>
-
         </div>
-        <p class="text-[10px] font-black text-gray-500 dark:text-zinc-400">Manage workspaces/agents</p>
-
       </div>
-
     </div>
 
     <!-- Create workspace form -->
@@ -59,31 +55,6 @@
 
     <div v-if="error" class="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400 px-5 py-3 rounded-sm text-[10px] font-black shadow-sm">
       {{ error }}
-    </div>
-
-    <!-- Overall Analytics -->
-    <div v-if="!loadingWorkspaces && workspaces.length > 0" class="px-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="bg-gray-50 dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-sm p-4 flex flex-col gap-1 shadow-sm transition-all hover:shadow-md">
-        <span class="text-[9px] font-black text-gray-500 dark:text-zinc-500 uppercase tracking-widest">Workspaces</span>
-        <span class="text-xl font-black text-gray-900 dark:text-zinc-50">{{ activeWorkspaces.length }}</span>
-      </div>
-      <div class="bg-gray-50 dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-sm p-4 flex flex-col gap-1 shadow-sm transition-all hover:shadow-md">
-        <span class="text-[9px] font-black text-gray-500 dark:text-zinc-500 uppercase tracking-widest">Online Agents</span>
-        <span class="text-xl font-black text-green-600 dark:text-green-500">{{ activeWorkspaces.filter(w => w.agentConnected).length }}</span>
-      </div>
-      <div class="bg-gray-50 dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-sm p-4 flex flex-col gap-1 shadow-sm transition-all hover:shadow-md">
-        <span class="text-[9px] font-black text-gray-500 dark:text-zinc-500 uppercase tracking-widest">Pending Tasks</span>
-        <span class="text-xl font-black text-gray-900 dark:text-zinc-50">{{ globalStats.pendingTasks }}</span>
-      </div>
-      <div class="bg-gray-50 dark:bg-zinc-900/50 border border-gray-200 dark:border-zinc-800 rounded-sm p-4 flex flex-col gap-1 shadow-sm transition-all hover:shadow-md">
-        <span class="text-[9px] font-black text-gray-500 dark:text-zinc-500 uppercase tracking-widest">Scheduled Tasks</span>
-        <span class="text-xl font-black text-gray-900 dark:text-zinc-50">{{ globalStats.scheduledTasks }}</span>
-      </div>
-    </div>
- 
-    <!-- Separator -->
-    <div v-if="!loadingWorkspaces && workspaces.length > 0" class="flex justify-center py-2">
-      <div class="h-px w-64 bg-gray-200 dark:bg-zinc-800/60"></div>
     </div>
 
     <!-- Workspace list -->
@@ -215,6 +186,26 @@
             No archived workspaces found
           </div>
         </section>
+      </div>
+    </div>
+
+    <!-- Bottom Stats -->
+    <div v-if="!loadingWorkspaces && workspaces.length > 0" class="px-4 pb-4 flex flex-wrap items-center gap-6 border-t border-gray-100 dark:border-zinc-800 pt-3">
+      <div class="flex items-baseline gap-1.5">
+        <span class="text-[8px] font-black text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Workspaces</span>
+        <span class="text-sm font-black text-gray-900 dark:text-zinc-100">{{ activeWorkspaces.length }}</span>
+      </div>
+      <div class="flex items-baseline gap-1.5">
+        <span class="text-[8px] font-black text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Online</span>
+        <span class="text-sm font-black text-green-600 dark:text-green-500">{{ activeWorkspaces.filter(w => w.agentConnected).length }}</span>
+      </div>
+      <div class="flex items-baseline gap-1.5">
+        <span class="text-[8px] font-black text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Pending</span>
+        <span class="text-sm font-black text-gray-900 dark:text-zinc-100">{{ globalStats.pendingTasks }}</span>
+      </div>
+      <div class="flex items-baseline gap-1.5">
+        <span class="text-[8px] font-black text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Scheduled</span>
+        <span class="text-sm font-black text-gray-900 dark:text-zinc-100">{{ globalStats.scheduledTasks }}</span>
       </div>
     </div>
   </div>
