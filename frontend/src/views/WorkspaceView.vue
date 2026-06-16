@@ -9,9 +9,7 @@
           </div>
 
         </div>
-        <p class="text-[10px] font-black text-gray-500 dark:text-zinc-400">Manage workspaces/agents</p>
-
-      </div>
+</div>
 
     </div>
 
