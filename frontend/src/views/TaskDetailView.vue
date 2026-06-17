@@ -137,16 +137,27 @@
       <template v-for="m in sortedMessages" :key="m.id">
 
         <!-- Agent message — left aligned -->
-        <div v-if="m.sender === 'agent'" class="flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 max-w-full md:max-w-[90%]">
+        <div v-if="m.sender === 'agent'" class="group flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 max-w-full md:max-w-[90%]">
           <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 flex items-center justify-center shrink-0 mt-0.5">
             <svg class="w-4 h-4 text-gray-700 dark:text-zinc-100" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>
           </div>
           <div class="flex flex-col items-start min-w-0">
              <div class="bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-sm p-3.5 shadow-sm min-w-0">
-               <span class="text-[9px] font-semibold text-gray-500 dark:text-zinc-400 block mb-1.5">
-                 Agent · {{ formatDateTime(m.createdAt) }}
-               </span>
-               <div class="text-[13px] font-medium text-gray-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap break-all">{{ m.text }}</div>
+               <div class="flex items-center justify-between mb-1.5">
+                 <span class="text-[9px] font-semibold text-gray-500 dark:text-zinc-400">Agent · {{ formatDateTime(m.createdAt) }}</span>
+                 <div class="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150">
+                   <button type="button" @click.stop="toggleMessageRender(m.id)"
+                           :class="!rawMessages.has(m.id) ? 'text-gray-700 dark:text-zinc-200' : 'text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300'"
+                           class="text-[8px] font-black uppercase tracking-wider transition-colors px-1 py-0.5 rounded">MD</button>
+                   <button type="button" @click.stop="copyMessageText(m.id, m.text)"
+                           class="text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 transition-colors p-0.5 rounded" title="Copy raw text">
+                     <svg v-if="!copiedMessages.has(m.id)" class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                     <svg v-else class="w-2.5 h-2.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                   </button>
+                 </div>
+               </div>
+               <div v-if="!rawMessages.has(m.id)" class="md-body text-[13px] text-gray-800 dark:text-zinc-200" v-html="renderMarkdown(m.text)"></div>
+               <div v-else class="text-[13px] font-medium text-gray-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap break-all">{{ m.text }}</div>
 
                <!-- Permission Request (agent message) -->
                <div v-if="m.metadata?.type === 'permission_request'" class="mt-4 border border-gray-200 dark:border-zinc-700 rounded-sm bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
@@ -225,7 +236,7 @@
         </div>
 
         <!-- Slack message — right aligned -->
-        <div v-else-if="m.sender === 'slack'" class="flex gap-3 flex-row-reverse animate-in fade-in slide-in-from-bottom-2 duration-300 self-end max-w-full md:max-w-[90%]">
+        <div v-else-if="m.sender === 'slack'" class="group flex gap-3 flex-row-reverse animate-in fade-in slide-in-from-bottom-2 duration-300 self-end max-w-full md:max-w-[90%]">
           <div class="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-100 flex items-center justify-center shrink-0 mt-0.5 overflow-hidden p-1.5 border border-gray-200 dark:border-zinc-700 shadow-sm">
              <svg viewBox="0 0 127 127" class="w-4 h-4 text-[#4A154B] dark:text-zinc-300 animate-in spin-in-12 duration-500" fill="currentColor">
                <path d="M27.2 80c0 7.3-5.9 13.2-13.2 13.2C6.7 93.2.8 87.3.8 80c0-7.3 5.9-13.2 13.2-13.2h13.2V80zm6.6 0c0-7.3 5.9-13.2 13.2-13.2 7.3 0 13.2 5.9 13.2 13.2v33c0 7.3-5.9 13.2-13.2 13.2-7.3 0-13.2-5.9-13.2-13.2V80zM47 27.2c-7.3 0-13.2-5.9-13.2-13.2C33.8 6.7 39.7.8 47 .8c7.3 0 13.2 5.9 13.2 13.2V27.2H47zm0 6.6c7.3 0 13.2 5.9 13.2 13.2 0 7.3-5.9 13.2-13.2 13.2H14c-7.3 0-13.2-5.9-13.2-13.2 0-7.3 5.9-13.2 13.2-13.2h33zM99.8 47c0-7.3 5.9-13.2 13.2-13.2 7.3 0 13.2 5.9 13.2 13.2 0 7.3-5.9 13.2-13.2 13.2H99.8V47zm-6.6 0c0 7.3-5.9 13.2-13.2 13.2-7.3 0-13.2-5.9-13.2-13.2V14c0-7.3 5.9-13.2 13.2-13.2 7.3 0 13.2 5.9 13.2 13.2v33zM80 99.8c7.3 0 13.2 5.9 13.2 13.2 0 7.3-5.9 13.2-13.2 13.2-7.3 0-13.2-5.9-13.2-13.2V99.8H80zm0-6.6c-7.3 0-13.2-5.9-13.2-13.2 0-7.3 5.9-13.2 13.2-13.2h33c7.3 0 13.2 5.9 13.2 13.2 0 7.3-5.9-13.2-13.2-13.2H80z"/>
@@ -233,10 +244,21 @@
           </div>
           <div class="flex flex-col items-end min-w-0">
              <div class="bg-gray-900 text-white dark:bg-zinc-800 dark:text-zinc-100 border border-transparent dark:border-zinc-700 rounded-sm p-3.5 shadow-sm min-w-0">
-               <span class="text-[9px] font-semibold text-gray-500 dark:text-zinc-400 block mb-1.5 text-right">
-                 Slack ({{ getSlackUser(m) }}) · {{ formatDateTime(m.createdAt) }}
-               </span>
-               <div class="text-[13px] font-medium leading-relaxed whitespace-pre-wrap text-right break-all">{{ m.text }}</div>
+               <div class="flex items-center justify-between mb-1.5">
+                 <span class="text-[9px] font-semibold text-gray-500 dark:text-zinc-400 text-right">Slack ({{ getSlackUser(m) }}) · {{ formatDateTime(m.createdAt) }}</span>
+                 <div class="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150">
+                   <button type="button" @click.stop="toggleMessageRender(m.id)"
+                           :class="!rawMessages.has(m.id) ? 'text-gray-300' : 'text-gray-500 hover:text-gray-300'"
+                           class="text-[8px] font-black uppercase tracking-wider transition-colors px-1 py-0.5 rounded">MD</button>
+                   <button type="button" @click.stop="copyMessageText(m.id, m.text)"
+                           class="text-gray-500 hover:text-gray-300 transition-colors p-0.5 rounded" title="Copy raw text">
+                     <svg v-if="!copiedMessages.has(m.id)" class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                     <svg v-else class="w-2.5 h-2.5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                   </button>
+                 </div>
+               </div>
+               <div v-if="!rawMessages.has(m.id)" class="md-body text-[13px] text-white" v-html="renderMarkdown(m.text)"></div>
+               <div v-else class="text-[13px] font-medium leading-relaxed whitespace-pre-wrap text-right break-all">{{ m.text }}</div>
                <!-- Attachments on slack message -->
                <div v-if="m.attachments && m.attachments.length > 0" class="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-700 dark:border-zinc-600 justify-end">
                  <div v-for="(att, i) in m.attachments" :key="i"
@@ -251,16 +273,27 @@
         </div>
 
         <!-- Human message — right aligned -->
-        <div v-else class="flex gap-3 flex-row-reverse animate-in fade-in slide-in-from-bottom-2 duration-300 self-end max-w-full md:max-w-[90%]">
+        <div v-else class="group flex gap-3 flex-row-reverse animate-in fade-in slide-in-from-bottom-2 duration-300 self-end max-w-full md:max-w-[90%]">
           <div class="w-8 h-8 rounded-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center shrink-0 mt-0.5 overflow-hidden">
              <svg class="w-4 h-4 text-gray-600 dark:text-zinc-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
           </div>
           <div class="flex flex-col items-end min-w-0">
              <div class="bg-gray-200 text-gray-900 dark:bg-zinc-800 dark:text-zinc-100 border border-gray-300 dark:border-zinc-700 rounded-sm p-3.5 shadow-sm min-w-0">
-               <span class="text-[9px] font-semibold text-gray-500 dark:text-zinc-400 block mb-1.5 text-right">
-                 You · {{ formatDateTime(m.createdAt) }}
-               </span>
-               <div class="text-[13px] font-medium leading-relaxed whitespace-pre-wrap text-right break-all">{{ m.text }}</div>
+               <div class="flex items-center justify-between mb-1.5">
+                 <span class="text-[9px] font-semibold text-gray-500 dark:text-zinc-400 text-right">You · {{ formatDateTime(m.createdAt) }}</span>
+                 <div class="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150">
+                   <button type="button" @click.stop="toggleMessageRender(m.id)"
+                           :class="!rawMessages.has(m.id) ? 'text-gray-700 dark:text-zinc-200' : 'text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300'"
+                           class="text-[8px] font-black uppercase tracking-wider transition-colors px-1 py-0.5 rounded">MD</button>
+                   <button type="button" @click.stop="copyMessageText(m.id, m.text)"
+                           class="text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 transition-colors p-0.5 rounded" title="Copy raw text">
+                     <svg v-if="!copiedMessages.has(m.id)" class="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                     <svg v-else class="w-2.5 h-2.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                   </button>
+                 </div>
+               </div>
+               <div v-if="!rawMessages.has(m.id)" class="md-body text-[13px] text-gray-800 dark:text-zinc-200" v-html="renderMarkdown(m.text)"></div>
+               <div v-else dir="auto" class="text-[13px] font-medium leading-relaxed whitespace-pre-wrap break-all">{{ m.text }}</div>
                <!-- Attachments on human message -->
                <div v-if="m.attachments && m.attachments.length > 0" class="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-300 dark:border-zinc-600 justify-end">
                  <div v-for="(att, i) in m.attachments" :key="i"
@@ -412,6 +445,8 @@ import { useTooltipStore } from '../stores/tooltipStore';
 import { useToasts } from '../composables/useToasts';
 import { useViewport } from '../composables/useViewport';
 import { useEventBus } from '../useEventBus';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 const { notifyError, notifySuccess } = useToasts();
 const route = useRoute();
@@ -429,6 +464,29 @@ const scrollContainer = ref(null);
 
 const isDragging = ref(false);
 let dragCounter = 0;
+
+const rawMessages = ref(new Set());
+function toggleMessageRender(id) {
+  const s = new Set(rawMessages.value);
+  s.has(id) ? s.delete(id) : s.add(id);
+  rawMessages.value = s;
+}
+function renderMarkdown(text) {
+  return DOMPurify.sanitize(marked.parse(text || '', { breaks: true }));
+}
+
+const copiedMessages = ref(new Set());
+async function copyMessageText(id, text) {
+  await navigator.clipboard.writeText(text || '');
+  const s = new Set(copiedMessages.value);
+  s.add(id);
+  copiedMessages.value = s;
+  setTimeout(() => {
+    const s2 = new Set(copiedMessages.value);
+    s2.delete(id);
+    copiedMessages.value = s2;
+  }, 1500);
+}
 
 function processFiles(files) {
   if (!files || files.length === 0) return;
@@ -731,3 +789,36 @@ function stripNote(body) {
   return body;
 }
 </script>
+
+<style>
+.md-body { line-height: 1.65; text-align: left; direction: ltr; word-break: break-word; }
+.md-body > *:first-child { margin-top: 0; }
+.md-body > *:last-child { margin-bottom: 0; }
+.md-body h1, .md-body h2, .md-body h3, .md-body h4, .md-body h5, .md-body h6 { font-weight: 700; margin: 1em 0 0.4em; line-height: 1.3; }
+.md-body h1 { font-size: 1.3em; }
+.md-body h2 { font-size: 1.15em; }
+.md-body h3 { font-size: 1.05em; }
+.md-body h4, .md-body h5, .md-body h6 { font-size: 1em; }
+.md-body p { margin: 0.55em 0; }
+.md-body ul { list-style-type: "- "; padding-left: 1.5em; margin: 0.5em 0; }
+.md-body ol { list-style-type: decimal; padding-left: 1.5em; margin: 0.5em 0; }
+.md-body ul ul, .md-body ul ul ul { list-style-type: "- "; }
+.md-body li { margin: 0.25em 0; display: list-item; }
+.md-body li > p { margin: 0.2em 0; }
+.md-body code { font-family: ui-monospace, monospace; font-size: 0.84em; background: rgba(0,0,0,0.06); border: 1px solid rgba(0,0,0,0.12); padding: 0.12em 0.38em; border-radius: 4px; white-space: pre-wrap; }
+.md-body pre { background: #f4f4f5; color: #27272a; border: 1px solid #e4e4e7; padding: 0.85em 1em; border-radius: 6px; overflow-x: auto; margin: 0.75em 0; }
+@media (prefers-color-scheme: dark) { .md-body pre { background: #18181b; color: #d4d4d8; border-color: #3f3f46; } }
+.dark .md-body pre { background: #18181b; color: #d4d4d8; border-color: #3f3f46; }
+.md-body pre code { background: none; border: none; padding: 0; font-size: 0.82em; white-space: pre-wrap; word-break: break-all; border-radius: 0; }
+.md-body blockquote { border-left: 3px solid #d1d5db; padding: 0.1em 0 0.1em 0.85em; color: #6b7280; margin: 0.6em 0; }
+.md-body blockquote p { margin: 0.2em 0; }
+.md-body a { text-decoration: underline; }
+.md-body a:hover { opacity: 0.75; }
+.md-body strong { font-weight: 700; }
+.md-body em { font-style: italic; }
+.md-body hr { border: none; border-top: 1px solid #e5e7eb; margin: 0.85em 0; }
+.md-body table { border-collapse: collapse; font-size: 0.9em; margin: 0.6em 0; width: 100%; }
+.md-body th, .md-body td { border: 1px solid #e5e7eb; padding: 0.35em 0.65em; text-align: left; }
+.md-body th { background: rgba(0,0,0,0.04); font-weight: 600; }
+.md-body img { max-width: 100%; border-radius: 4px; margin: 0.4em 0; }
+</style>
