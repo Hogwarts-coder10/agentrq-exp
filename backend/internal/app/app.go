@@ -258,7 +258,7 @@ func New(cfg Config) (*App, error) {
 	schedSvc.Start(context.Background())
 
 	// ── Auth ──────────────────────────────────────────────────────────
-	authSvc := auth.New(cfg.Auth.Google.ClientID, cfg.Auth.Google.ClientSecret, fmt.Sprintf("%s/api/v1/auth/google/callback", cfg.App.BaseURL))
+	authSvc := auth.NewGoogle(cfg.Auth.Google.ClientID, cfg.Auth.Google.ClientSecret, fmt.Sprintf("%s/api/v1/auth/google/callback", cfg.App.BaseURL))
 	githubAuthSvc := auth.NewGitHub(cfg.Auth.GitHub.ClientID, cfg.Auth.GitHub.ClientSecret, fmt.Sprintf("%s/api/v1/auth/github/callback", cfg.App.BaseURL))
 
 	// ── MCP manager ───────────────────────────────────────────────────────────
