@@ -1,43 +1,54 @@
 import { ref, onUnmounted, unref } from 'vue';
 
+// Shared across all useEventBus instances — ensures only one auth check fires at a time
+// regardless of how many SSE connections error simultaneously.
+let sharedAuthCheckPromise = null;
+
+async function checkAuth() {
+  if (sharedAuthCheckPromise) return sharedAuthCheckPromise;
+  sharedAuthCheckPromise = fetch('/api/v1/auth/user')
+    .then(res => res.status)
+    .catch(() => null)
+    .finally(() => { sharedAuthCheckPromise = null; });
+  return sharedAuthCheckPromise;
+}
+
 export function useEventBus(workspaceId) {
   const events = ref([]);
   const isConnected = ref(false);
   let eventSource = null;
+  let reconnectDelay = 1000;
 
   function connect() {
     if (eventSource) return;
-    
+
     events.value = [];
     const wsId = unref(workspaceId);
     const url = wsId ? `/api/v1/workspaces/${wsId}/events` : `/api/v1/events`;
     eventSource = new EventSource(url);
-    
+
     eventSource.onopen = () => {
       isConnected.value = true;
+      reconnectDelay = 1000;
     };
-    
+
     eventSource.onerror = async (error) => {
       console.error('EventSource failed:', error);
       isConnected.value = false;
       eventSource.close();
       eventSource = null;
-      
-      try {
-        const res = await fetch('/api/v1/auth/user');
-        if (res.status === 401) {
-          console.warn('Not authenticated. Stopping EventSource reconnection and redirecting to login.');
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login';
-          }
-          return;
+
+      const status = await checkAuth();
+      if (status === 401) {
+        console.warn('Not authenticated. Stopping EventSource reconnection and redirecting to login.');
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
         }
-      } catch (err) {
-        // Ignore fetch errors (e.g. network down) and allow reconnect
+        return;
       }
 
-      // Reconnect with backoff in real apps; simple 3s timeout here
-      setTimeout(connect, 3000);
+      setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 30000);
     };
 
     eventSource.onmessage = (e) => {
