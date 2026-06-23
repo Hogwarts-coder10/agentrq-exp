@@ -28,6 +28,8 @@ type (
 	Params struct {
 		Crud             crud.Controller
 		Auth             auth.Service
+		GithubAuth       auth.Service
+		GithubClientID   string
 		TokenSvc         auth.TokenService
 		MCPManager       *mcpctrl.Manager
 		EventBus         *eventbus.Bus
@@ -48,6 +50,8 @@ type (
 	handler struct {
 		crud             crud.Controller
 		auth             auth.Service
+		githubAuth       auth.Service
+		githubClientID   string
 		tokenSvc         auth.TokenService
 		mcpManager       *mcpctrl.Manager
 		bus              *eventbus.Bus
@@ -78,6 +82,8 @@ func New(p Params) (Handler, error) {
 	h := &handler{
 		crud:             p.Crud,
 		auth:             p.Auth,
+		githubAuth:       p.GithubAuth,
+		githubClientID:   p.GithubClientID,
 		tokenSvc:         p.TokenSvc,
 		mcpManager:       p.MCPManager,
 		bus:              p.EventBus,
@@ -150,6 +156,8 @@ func (h *handler) registerPublicAuthRoutes() {
 	r.Get("/config", h.authConfig())
 	r.Get("/google/login", h.googleLogin())
 	r.Get("/google/callback", h.googleCallback())
+	r.Get("/github/login", h.githubLogin())
+	r.Get("/github/callback", h.githubCallback())
 	r.Post("/root/login", h.rootLogin())
 }
 
@@ -228,7 +236,8 @@ func (h *handler) authMiddleware() fiber.Handler {
 func (h *handler) authConfig() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
-			"rootLoginEnabled": h.rootLoginEnabled,
+			"rootLoginEnabled":   h.rootLoginEnabled,
+			"githubLoginEnabled": h.githubClientID != "",
 		})
 	}
 }
@@ -295,7 +304,11 @@ func (h *handler) rootLogin() fiber.Handler {
 
 func (h *handler) googleLogin() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		state := c.Query("redirect_url", "state")
+		redirectURL := h.sanitizeRedirectURL(c.Query("redirect_url", "/"))
+		state, err := h.tokenSvc.CreateOAuthStateToken(redirectURL, "google")
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate state"})
+		}
 		return c.Redirect(h.auth.GetAuthURL(state))
 	}
 }
@@ -363,26 +376,112 @@ func (h *handler) googleCallback() fiber.Handler {
 		}
 		c.Cookie(cookie)
 
-		state := c.Query("state")
 		redirectURL := "/"
-		// Situational security: validate redirect URL to prevent open redirect
-		if state != "" && state != "state" {
-			if strings.HasPrefix(state, "/") && !strings.HasPrefix(state, "//") && !strings.HasPrefix(state, "/\\") {
-				redirectURL = state
-			} else {
-				// Parse absolute URL and validate against baseURL
-				if pRedirect, err := url.Parse(state); err == nil && pRedirect.IsAbs() {
-					if pBase, err := url.Parse(h.baseURL); err == nil {
-						if pRedirect.Host == pBase.Host && pRedirect.Scheme == pBase.Scheme {
-							redirectURL = state
-						}
-					}
-				}
+		if stateToken := c.Query("state"); stateToken != "" {
+			if rurl, err := h.tokenSvc.ValidateOAuthStateToken(stateToken, "google"); err == nil {
+				redirectURL = h.sanitizeRedirectURL(rurl)
 			}
 		}
 
 		return c.Redirect(redirectURL)
 	}
+}
+
+func (h *handler) githubLogin() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if h.githubClientID == "" {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "github login disabled"})
+		}
+		redirectURL := h.sanitizeRedirectURL(c.Query("redirect_url", "/"))
+		state, err := h.tokenSvc.CreateOAuthStateToken(redirectURL, "github")
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate state"})
+		}
+		return c.Redirect(h.githubAuth.GetAuthURL(state))
+	}
+}
+
+func (h *handler) githubCallback() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		code := c.Query("code")
+		ctx, cancel := newContext(c)
+		defer cancel()
+
+		user, err := h.githubAuth.Exchange(ctx, code)
+		if err != nil {
+			zlog.Error().Err(err).Msg("GitHub OAuth exchange failed")
+			c.Set(_headerContentType, _mimeJSON)
+			e, status := mapper.FromErrorToHTTPResponse(err)
+			c.Status(status)
+			return c.Send(e)
+		}
+
+		zlog.Info().Str("id", user.ID).Str("email", user.Email).Str("name", user.Name).Msg("GitHub OAuth code exchanged")
+
+		dbUser, err := h.crud.FindOrCreateUser(ctx, entity.FindOrCreateUserRequest{
+			Email:   user.Email,
+			Name:    user.Name,
+			Picture: user.Picture,
+		})
+		if err != nil {
+			zlog.Error().Err(err).Msg("Failed to sync GitHub user")
+			c.Set(_headerContentType, _mimeJSON)
+			e, status := mapper.FromErrorToHTTPResponse(err)
+			c.Status(status)
+			return c.Send(e)
+		}
+
+		userID := monoflake.ID(dbUser.User.ID).String()
+
+		tokenString, err := h.tokenSvc.CreateToken(userID, user.Email, user.Name, user.Picture)
+		if err != nil {
+			zlog.Error().Err(err).Msg("Failed to sign GitHub token")
+			c.Set(_headerContentType, _mimeJSON)
+			e, status := mapper.FromErrorToHTTPResponse(err)
+			c.Status(status)
+			return c.Send(e)
+		}
+
+		cookie := &fiber.Cookie{
+			Name:     "at",
+			Value:    tokenString,
+			Expires:  time.Now().Add(24 * time.Hour),
+			HTTPOnly: true,
+			Secure:   h.sslEnabled,
+			SameSite: "Lax",
+			Path:     "/",
+		}
+		if h.domain != "" && !strings.HasPrefix(h.domain, "localhost") {
+			cookie.Domain = "." + h.domain
+		}
+		c.Cookie(cookie)
+
+		redirectURL := "/"
+		if stateToken := c.Query("state"); stateToken != "" {
+			if rurl, err := h.tokenSvc.ValidateOAuthStateToken(stateToken, "github"); err == nil {
+				redirectURL = h.sanitizeRedirectURL(rurl)
+			}
+		}
+
+		return c.Redirect(redirectURL)
+	}
+}
+
+// sanitizeRedirectURL validates a redirect URL to prevent open redirect attacks.
+// Only same-origin relative paths (starting with /) or absolute URLs matching
+// the configured baseURL are accepted; everything else falls back to /.
+func (h *handler) sanitizeRedirectURL(raw string) string {
+	if strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "//") && !strings.HasPrefix(raw, "/\\") {
+		return raw
+	}
+	if pRedirect, err := url.Parse(raw); err == nil && pRedirect.IsAbs() {
+		if pBase, err := url.Parse(h.baseURL); err == nil {
+			if pRedirect.Host == pBase.Host && pRedirect.Scheme == pBase.Scheme {
+				return raw
+			}
+		}
+	}
+	return "/"
 }
 
 // ── Workspaces ──────────────────────────────────────────────────────────────────

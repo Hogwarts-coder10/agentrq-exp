@@ -42,6 +42,14 @@ func (m *mockTokenSvc) CreateMCPToken(userID, workspaceID, tokenType string) (st
 	return m.createMCPTokenFunc(userID, workspaceID, tokenType)
 }
 
+func (m *mockTokenSvc) CreateOAuthStateToken(redirectURL, provider string) (string, error) {
+	return redirectURL, nil // passthrough for tests that don't need real JWT signing
+}
+
+func (m *mockTokenSvc) ValidateOAuthStateToken(tokenStr, provider string) (string, error) {
+	return tokenStr, nil // treat the raw value as the redirect URL in simple tests
+}
+
 type mockCrudController struct {
 	crud.Controller
 	findOrCreateUserFunc func(ctx context.Context, req entity.FindOrCreateUserRequest) (*entity.FindOrCreateUserResponse, error)
@@ -51,79 +59,100 @@ func (m *mockCrudController) FindOrCreateUser(ctx context.Context, req entity.Fi
 	return m.findOrCreateUserFunc(ctx, req)
 }
 
-func TestGoogleCallback_OpenRedirectPrevention(t *testing.T) {
+// TestSanitizeRedirectURL verifies the open-redirect prevention helper directly.
+func TestSanitizeRedirectURL(t *testing.T) {
+	h := &handler{baseURL: "http://localhost:3000"}
+
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"/workspaces", "/workspaces"},
+		{"http://localhost:3000/safe", "http://localhost:3000/safe"},
+		{"//evil.com", "/"},
+		{"/\\evil.com", "/"},
+		{"http://localhost:3000.evil.com", "/"},
+		{"http://evil.com/phish", "/"},
+		{"", "/"},
+	}
+
+	for _, tt := range tests {
+		got := h.sanitizeRedirectURL(tt.input)
+		if got != tt.want {
+			t.Errorf("sanitizeRedirectURL(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestGoogleCallback_StateJWT(t *testing.T) {
+	// Use a real token service so JWT state round-trips correctly.
+	realTokenSvc := auth.NewTokenService(auth.TokenConfig{JWTSecret: "test-secret"})
+
 	app := fiber.New()
 	authSvc := &mockAuthService{}
-	tokenSvc := &mockTokenSvc{}
 	crudCtrl := &mockCrudController{}
 
 	h := &handler{
 		auth:     authSvc,
-		tokenSvc: tokenSvc,
+		tokenSvc: realTokenSvc,
 		crud:     crudCtrl,
 		baseURL:  "http://localhost:3000",
 	}
-
 	app.Get("/google/callback", h.googleCallback())
 
 	authSvc.exchangeFunc = func(ctx context.Context, code string) (*auth.User, error) {
 		return &auth.User{ID: "123", Email: "test@example.com", Name: "Test"}, nil
 	}
-
 	crudCtrl.findOrCreateUserFunc = func(ctx context.Context, req entity.FindOrCreateUserRequest) (*entity.FindOrCreateUserResponse, error) {
 		return &entity.FindOrCreateUserResponse{User: entity.User{ID: 1}}, nil
 	}
 
-	tokenSvc.createTokenFunc = func(userID, email, name, picture string) (string, error) {
-		return "valid-jwt", nil
-	}
+	t.Run("Valid JWT state redirects correctly", func(t *testing.T) {
+		state, _ := realTokenSvc.CreateOAuthStateToken("/workspaces", "google")
+		req := httptest.NewRequest("GET", "/google/callback?code=valid-code&state="+state, nil)
+		resp, _ := app.Test(req)
+		if resp.StatusCode != http.StatusFound {
+			t.Fatalf("expected 302, got %d", resp.StatusCode)
+		}
+		if loc := resp.Header.Get("Location"); loc != "/workspaces" {
+			t.Errorf("expected /workspaces, got %s", loc)
+		}
+	})
 
-	tests := []struct {
-		name        string
-		state       string
-		expectedLoc string
-	}{
-		{
-			name:        "Safe local redirect",
-			state:       "/workspaces",
-			expectedLoc: "/workspaces",
-		},
-		{
-			name:        "Malicious absolute redirect",
-			state:       "http://localhost:3000.evil.com",
-			expectedLoc: "/",
-		},
-		{
-			name:        "Malicious relative redirect //",
-			state:       "//evil.com",
-			expectedLoc: "/",
-		},
-		{
-			name:        "Malicious relative redirect /\\",
-			state:       "/\\evil.com",
-			expectedLoc: "/",
-		},
-		{
-			name:        "Safe absolute redirect",
-			state:       "http://localhost:3000/safe",
-			expectedLoc: "http://localhost:3000/safe",
-		},
-	}
+	t.Run("Forged state falls back to /", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/google/callback?code=valid-code&state=forged-not-a-jwt", nil)
+		resp, _ := app.Test(req)
+		if resp.StatusCode != http.StatusFound {
+			t.Fatalf("expected 302, got %d", resp.StatusCode)
+		}
+		if loc := resp.Header.Get("Location"); loc != "/" {
+			t.Errorf("expected /, got %s", loc)
+		}
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/google/callback?code=valid-code&state="+tt.state, nil)
-			resp, _ := app.Test(req)
+	t.Run("Wrong provider state falls back to /", func(t *testing.T) {
+		// State signed for github should be rejected by google callback
+		state, _ := realTokenSvc.CreateOAuthStateToken("/workspaces", "github")
+		req := httptest.NewRequest("GET", "/google/callback?code=valid-code&state="+state, nil)
+		resp, _ := app.Test(req)
+		if resp.StatusCode != http.StatusFound {
+			t.Fatalf("expected 302, got %d", resp.StatusCode)
+		}
+		if loc := resp.Header.Get("Location"); loc != "/" {
+			t.Errorf("expected /, got %s", loc)
+		}
+	})
 
-			if resp.StatusCode != http.StatusFound {
-				t.Errorf("Expected status 302, got %d", resp.StatusCode)
-			}
-			loc := resp.Header.Get("Location")
-			if loc != tt.expectedLoc {
-				t.Errorf("Expected Location %s, got %s", tt.expectedLoc, loc)
-			}
-		})
-	}
+	t.Run("Missing state falls back to /", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/google/callback?code=valid-code", nil)
+		resp, _ := app.Test(req)
+		if resp.StatusCode != http.StatusFound {
+			t.Fatalf("expected 302, got %d", resp.StatusCode)
+		}
+		if loc := resp.Header.Get("Location"); loc != "/" {
+			t.Errorf("expected /, got %s", loc)
+		}
+	})
 }
 
 type mockCrudGetWorkspace struct {

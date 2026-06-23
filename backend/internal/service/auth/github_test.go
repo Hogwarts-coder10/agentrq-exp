@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func TestGoogleAuthService(t *testing.T) {
-	s := NewGoogle("client-id", "client-secret", "http://localhost/callback")
+func TestGitHubAuthService(t *testing.T) {
+	s := NewGitHub("client-id", "client-secret", "http://localhost/callback")
 
 	t.Run("GetAuthURL", func(t *testing.T) {
 		state := "some-state"
@@ -20,8 +20,8 @@ func TestGoogleAuthService(t *testing.T) {
 		if !contains(url, "state="+state) {
 			t.Errorf("URL missing state")
 		}
-		if !contains(url, "googleapis.com") {
-			t.Errorf("URL should point to googleapis.com")
+		if !contains(url, "github.com") {
+			t.Errorf("URL should point to github.com")
 		}
 	})
 
@@ -35,13 +35,4 @@ func TestGoogleAuthService(t *testing.T) {
 			t.Error("expected nil user for invalid code, got object")
 		}
 	})
-}
-
-func contains(s, substr string) bool {
-	for i := 0; i < len(s)-len(substr)+1; i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

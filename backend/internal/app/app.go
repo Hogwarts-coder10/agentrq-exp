@@ -74,6 +74,10 @@ type (
 				ClientID     string `yaml:"clientId"`
 				ClientSecret string `yaml:"clientSecret"`
 			} `yaml:"google"`
+			GitHub struct {
+				ClientID     string `yaml:"clientId"`
+				ClientSecret string `yaml:"clientSecret"`
+			} `yaml:"github"`
 			JWTSecret         string `yaml:"jwtSecret"`
 			RootAccessToken   string `yaml:"rootAccessToken"`
 			RootLoginEnabled  bool   `yaml:"rootLoginEnabled"`
@@ -254,7 +258,8 @@ func New(cfg Config) (*App, error) {
 	schedSvc.Start(context.Background())
 
 	// ── Auth ──────────────────────────────────────────────────────────
-	authSvc := auth.New(cfg.Auth.Google.ClientID, cfg.Auth.Google.ClientSecret, fmt.Sprintf("%s/api/v1/auth/google/callback", cfg.App.BaseURL))
+	authSvc := auth.NewGoogle(cfg.Auth.Google.ClientID, cfg.Auth.Google.ClientSecret, fmt.Sprintf("%s/api/v1/auth/google/callback", cfg.App.BaseURL))
+	githubAuthSvc := auth.NewGitHub(cfg.Auth.GitHub.ClientID, cfg.Auth.GitHub.ClientSecret, fmt.Sprintf("%s/api/v1/auth/github/callback", cfg.App.BaseURL))
 
 	// ── MCP manager ───────────────────────────────────────────────────────────
 	mcpManager := mcp.NewManager(func(workspaceID int64, userID string) *mcp.WorkspaceServer {
@@ -730,6 +735,7 @@ func New(cfg Config) (*App, error) {
 	if _, err := handlerapi.New(handlerapi.Params{
 		Crud:             crudCtrl,
 		Auth:             authSvc,
+		GithubAuth:       githubAuthSvc,
 		TokenSvc:         tokenSvc,
 		MCPManager:       mcpManager,
 		EventBus:         bus,
@@ -740,6 +746,7 @@ func New(cfg Config) (*App, error) {
 		TokenKey:         cfg.Auth.WorkspaceTokenKey,
 		RootLoginEnabled: cfg.Auth.RootLoginEnabled,
 		RootToken:        cfg.Auth.RootAccessToken,
+		GithubClientID:   cfg.Auth.GitHub.ClientID,
 		Router:           apiGroup,
 		SlackCtrl:        slackCtrl,
 		PushCtrl:         pushCtrl,
