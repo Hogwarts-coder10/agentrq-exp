@@ -304,7 +304,11 @@ func (h *handler) rootLogin() fiber.Handler {
 
 func (h *handler) googleLogin() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		state := c.Query("redirect_url", "state")
+		redirectURL := h.sanitizeRedirectURL(c.Query("redirect_url", "/"))
+		state, err := h.tokenSvc.CreateOAuthStateToken(redirectURL, "google")
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate state"})
+		}
 		return c.Redirect(h.auth.GetAuthURL(state))
 	}
 }
@@ -372,21 +376,10 @@ func (h *handler) googleCallback() fiber.Handler {
 		}
 		c.Cookie(cookie)
 
-		state := c.Query("state")
 		redirectURL := "/"
-		// Situational security: validate redirect URL to prevent open redirect
-		if state != "" && state != "state" {
-			if strings.HasPrefix(state, "/") && !strings.HasPrefix(state, "//") && !strings.HasPrefix(state, "/\\") {
-				redirectURL = state
-			} else {
-				// Parse absolute URL and validate against baseURL
-				if pRedirect, err := url.Parse(state); err == nil && pRedirect.IsAbs() {
-					if pBase, err := url.Parse(h.baseURL); err == nil {
-						if pRedirect.Host == pBase.Host && pRedirect.Scheme == pBase.Scheme {
-							redirectURL = state
-						}
-					}
-				}
+		if stateToken := c.Query("state"); stateToken != "" {
+			if rurl, err := h.tokenSvc.ValidateOAuthStateToken(stateToken, "google"); err == nil {
+				redirectURL = h.sanitizeRedirectURL(rurl)
 			}
 		}
 
@@ -399,7 +392,11 @@ func (h *handler) githubLogin() fiber.Handler {
 		if h.githubClientID == "" {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "github login disabled"})
 		}
-		state := c.Query("redirect_url", "state")
+		redirectURL := h.sanitizeRedirectURL(c.Query("redirect_url", "/"))
+		state, err := h.tokenSvc.CreateOAuthStateToken(redirectURL, "github")
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate state"})
+		}
 		return c.Redirect(h.githubAuth.GetAuthURL(state))
 	}
 }
@@ -459,24 +456,32 @@ func (h *handler) githubCallback() fiber.Handler {
 		}
 		c.Cookie(cookie)
 
-		state := c.Query("state")
 		redirectURL := "/"
-		if state != "" && state != "state" {
-			if strings.HasPrefix(state, "/") && !strings.HasPrefix(state, "//") && !strings.HasPrefix(state, "/\\") {
-				redirectURL = state
-			} else {
-				if pRedirect, err := url.Parse(state); err == nil && pRedirect.IsAbs() {
-					if pBase, err := url.Parse(h.baseURL); err == nil {
-						if pRedirect.Host == pBase.Host && pRedirect.Scheme == pBase.Scheme {
-							redirectURL = state
-						}
-					}
-				}
+		if stateToken := c.Query("state"); stateToken != "" {
+			if rurl, err := h.tokenSvc.ValidateOAuthStateToken(stateToken, "github"); err == nil {
+				redirectURL = h.sanitizeRedirectURL(rurl)
 			}
 		}
 
 		return c.Redirect(redirectURL)
 	}
+}
+
+// sanitizeRedirectURL validates a redirect URL to prevent open redirect attacks.
+// Only same-origin relative paths (starting with /) or absolute URLs matching
+// the configured baseURL are accepted; everything else falls back to /.
+func (h *handler) sanitizeRedirectURL(raw string) string {
+	if strings.HasPrefix(raw, "/") && !strings.HasPrefix(raw, "//") && !strings.HasPrefix(raw, "/\\") {
+		return raw
+	}
+	if pRedirect, err := url.Parse(raw); err == nil && pRedirect.IsAbs() {
+		if pBase, err := url.Parse(h.baseURL); err == nil {
+			if pRedirect.Host == pBase.Host && pRedirect.Scheme == pBase.Scheme {
+				return raw
+			}
+		}
+	}
+	return "/"
 }
 
 // ── Workspaces ──────────────────────────────────────────────────────────────────

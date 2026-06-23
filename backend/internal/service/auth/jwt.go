@@ -21,11 +21,18 @@ type Claims struct {
 	Picture string `json:"picture,omitempty"`
 }
 
+type StateClaims struct {
+	jwt.RegisteredClaims
+	RedirectURL string `json:"rurl,omitempty"`
+}
+
 type TokenService interface {
 	CreateToken(userID, email, name, picture string) (string, error)
 	CreateMCPToken(userID, workspaceID, tokenType string) (string, error)
 	CreateOAuthCodeToken(userID, workspaceID string) (string, error)
+	CreateOAuthStateToken(redirectURL, provider string) (string, error)
 	ValidateToken(tokenStr string) (*Claims, error)
+	ValidateOAuthStateToken(tokenStr, provider string) (redirectURL string, err error)
 }
 
 type tokenService struct {
@@ -92,6 +99,39 @@ func (s *tokenService) CreateOAuthCodeToken(userID, workspaceID string) (string,
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(s.secret)
+}
+
+func (s *tokenService) CreateOAuthStateToken(redirectURL, provider string) (string, error) {
+	now := time.Now()
+	claims := StateClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   "oauth_state",
+			Audience:  jwt.ClaimStrings{provider},
+			ExpiresAt: jwt.NewNumericDate(now.Add(3 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now.Add(-2 * time.Second)),
+		},
+		RedirectURL: redirectURL,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(s.secret)
+}
+
+func (s *tokenService) ValidateOAuthStateToken(tokenStr, provider string) (string, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &StateClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method")
+		}
+		return s.secret, nil
+	}, jwt.WithAudience(provider))
+	if err != nil {
+		return "", err
+	}
+
+	claims, ok := token.Claims.(*StateClaims)
+	if !ok || !token.Valid {
+		return "", errors.New("invalid state token")
+	}
+	return claims.RedirectURL, nil
 }
 
 func (s *tokenService) ValidateToken(tokenStr string) (*Claims, error) {
