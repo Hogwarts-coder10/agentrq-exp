@@ -206,9 +206,27 @@
         <!-- Sidebar Footer -->
         <div class="mt-auto p-4">
 
-          <!-- App Version -->
-          <div v-if="!isCollapsed || isMobileMenuOpen" class="px-2 mb-3">
+          <!-- App Version & Docs -->
+          <div v-if="!isCollapsed || isMobileMenuOpen" class="px-2 mb-3 flex items-center justify-between gap-2">
             <span class="text-[10px] text-gray-400 dark:text-zinc-600 font-mono">v{{ appVersion }}</span>
+            <a href="https://agentrq.com/docs" target="_blank" rel="noopener noreferrer"
+               class="flex items-center gap-1 text-[10px] text-gray-400 dark:text-zinc-600 hover:text-gray-700 dark:hover:text-zinc-300 transition-colors">
+              <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+              </svg>
+              Docs
+            </a>
+          </div>
+
+          <!-- Docs (collapsed) -->
+          <div v-else class="mb-3 flex justify-center">
+            <a href="https://agentrq.com/docs" target="_blank" rel="noopener noreferrer"
+               @mouseenter="showTooltip($event, 'Docs')" @mouseleave="hideTooltip"
+               class="flex items-center justify-center size-8 rounded-md text-gray-400 dark:text-zinc-600 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-zinc-800 transition-all duration-150">
+              <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+              </svg>
+            </a>
           </div>
 
           <!-- User Profile -->
