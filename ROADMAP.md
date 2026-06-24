@@ -4,9 +4,14 @@
 
 A command-line interface that connects to the AgentRQ backend and spawns agents for desired workspaces. Enables users to manage workspaces, trigger tasks, and attach agents directly from the terminal without the web UI.
 
-## 2. Agent-to-Agent Collaborative Workflows
+## 2. Agent-to-Agent Collaborative Workflows ✅ Implemented
 
-TBD.
+Agents can now coordinate work across workspaces, both supervisor-driven and fully decoupled:
+
+- **Supervisor → Worker orchestration**: a supervisor agent connects to the Core MCP server (`coremcp`) over a single OAuth2 session and delegates subtasks to specialist agents in any workspace via `createTask(workspaceId, ...)`, monitoring progress with `listTasks`/`getTask`.
+- **Cross-workspace events**: named event signals (`publishEvent`) let one workspace trigger tasks in others via `EventTrigger` subscriptions, with `EmitEventID` chaining for multi-stage pipelines — no supervisor required.
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) → [Supervisor → Worker Architecture](./ARCHITECTURE.md#supervisor--worker-architecture) and [Events (Cross-Workspace Signals)](./ARCHITECTURE.md#events-cross-workspace-signals).
 
 ## 3. Skills Marketplace
 
